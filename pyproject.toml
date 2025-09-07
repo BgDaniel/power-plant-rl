@@ -1,0 +1,24 @@
+[project]
+name = "power-plant-rl"
+version = "0.1.0"
+description = "Reinforcement learning project for power plant optimization"
+authors = [
+    {name = "BgDaniel",email = "daniel.bergermat@t-online.de"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+]
+
+[tool.poetry]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.2"
+black = "^25.1.0"
+flake8 = "^7.3.0"
+mypy = "^1.17.1"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

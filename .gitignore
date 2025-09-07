@@ -1,0 +1,46 @@
+# ----------------------------
+# Python
+# ----------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py[cod]
+*.pyd
+*.so
+
+# ----------------------------
+# Virtual Environments
+# ----------------------------
+# If Poetry creates venv in project folder
+.venv/
+
+# ----------------------------
+# Poetry lock / configuration
+# ----------------------------
+# pyproject.toml should be committed
+# poetry.lock should also be committed for reproducibility
+
+# ----------------------------
+# PyCharm
+# ----------------------------
+.idea/
+*.iml
+
+# ----------------------------
+# Jupyter Notebook
+# ----------------------------
+.ipynb_checkpoints
+
+# ----------------------------
+# OS / system files
+# ----------------------------
+.DS_Store
+Thumbs.db
+
+# ----------------------------
+# Logs and temporary files
+# ----------------------------
+logs/
+*.log
+temp/
