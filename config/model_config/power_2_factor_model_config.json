@@ -1,0 +1,7 @@
+{
+  "sigma_s": 0.1,
+  "kappa_s": 2.0,
+  "sigma_l": 0.03,
+  "kappa_l": 0.05,
+  "rho": 0.3
+}
