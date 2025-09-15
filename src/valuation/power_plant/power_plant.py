@@ -13,123 +13,102 @@ from valuation.operations_states import OperationalState
 from valuation.operational_control import OptimalControl
 
 
-def get_next_state(
-    current_optimal_state: OperationalState, optimal_control: OptimalControl
-) -> OperationalState:
-    """
-    Get the next operational state based on the current state and optimal control decision.
 
-    Args:
-        current_optimal_state (OperationalState): The current state of the power plant.
-        optimal_control (OptimalControl): The optimal control decision for the next step.
-
-    Returns:
-        OperationalState: The next operational state after applying the optimal control decision.
-    """
-    if current_optimal_state == OperationalState.IDLE:
-        if optimal_control == OptimalControl.RAMPING_UP:
-            return OperationalState.RAMPING_UP
-        else:
-            return OperationalState.IDLE  # Do Nothing remains in IDLE
-
-    elif current_optimal_state == OperationalState.RAMPING_UP:
-        return OperationalState.RUNNING
-
-    elif current_optimal_state == OperationalState.RUNNING:
-        if optimal_control == OptimalControl.RAMPING_DOWN:
-            return OperationalState.RAMPING_DOWN
-        else:  # DO_NOTHING
-            return OperationalState.RUNNING  # Stay running
-
-    elif current_optimal_state == OperationalState.RAMPING_DOWN:
-        return OperationalState.IDLE
 
 
 class PowerPlant:
     """
-    Class representing a power plant with various operational states, control decisions, and optimization.
-
-    Attributes:
-        operation_costs (float): Fixed operational costs of the power plant.
-        alpha (float): Coefficient for operational cost factor.
-        ramping_up_costs (float): Costs associated with ramping up operations.
-        ramping_down_costs (float): Costs associated with ramping down operations.
-        idle_costs (float): Costs associated with being idle.
-        market_simulation (MarketSimulation): Instance of MarketSimulation class for market simulation.
-        cashflows (np.ndarray): Cash flows for different operational states (idle, ramping up, running, ramping down).
-        value (np.ndarray): Values associated with the cashflows for each simulation.
-        optimal_control_decision (np.ndarray): Array storing the optimal control decisions (RAMPING_UP, RAMPING_DOWN, DO_NOTHING).
-        optimal_value (np.ndarray): Optimal value for each simulation day.
+    Class representing a power plant with operational costs, ramping constraints,
+    and market data inputs (forward/day-ahead prices).
     """
 
     def __init__(
         self,
-        operation_costs: float,
-        alpha: float,
-        ramping_up_costs: float,
-        ramping_down_costs: float,
-        n_days_rampgin_up: int,
-        n_days_rampgin_down: int,
-        idle_costs: float,
-        simulation_start: date,
-        simulation_end: date,
-        power_volatility: float,
-        coal_volatility: float,
-        correlation: float,
-        fwd_curve_power: pd.Series,
-        fwd_curve_coal: pd.Series,
-        sigma_ou_power: float,
-        sigma_ou_coal: float,
-        beta_power: float,
-        beta_coal: float,
-        k: int = 3,  # Default polynomial degree
+        power_fwd_prices: xr.DataArray,
+        coal_fwd_prices: xr.DataArray,
+        power_day_ahead_prices: pd.DataFrame,
+        coal_day_ahead_prices: pd.DataFrame,
+        config: Optional[PowerPlantConfig] = None,
+        config_path: Optional[str] = None,
     ) -> None:
-        """Initializes the PowerPlant class, which internally creates an instance of the MarketSimulation class with the
-        provided operational and market simulation parameters.
+        """
+        Initialize a PowerPlant instance.
+
+        Parameters
+        ----------
+        power_fwd_prices : xr.DataArray
+            Forward prices for power (simulated).
+        coal_fwd_prices : xr.DataArray
+            Forward prices for coal (simulated).
+        power_day_ahead_prices : pd.DataFrame
+            Day-ahead power prices (simulated).
+        coal_day_ahead_prices : pd.DataFrame
+            Day-ahead coal prices (simulated).
+        config : PowerPlantConfig, optional
+            Operational parameter configuration.
+        config_path : str, optional
+            Path to JSON config file (if config is not directly provided).
+        """
+        if config is None:
+            if config_path is not None:
+                config = PowerPlantConfig.from_json(config_path)
+            else:
+                raise ValueError("Either config or config_path must be provided.")
+
+        # Market data
+        self.power_fwd_prices = power_fwd_prices
+        self.coal_fwd_prices = coal_fwd_prices
+        self.power_day_ahead_prices = power_day_ahead_prices
+        self.coal_day_ahead_prices = coal_day_ahead_prices
+
+        # Operational parameters
+        self.config = config
+        self.operation_costs = config.operation_costs
+        self.alpha = config.alpha
+        self.ramping_up_costs = config.ramping_up_costs
+        self.ramping_down_costs = config.ramping_down_costs
+        self.n_days_ramping_up = config.n_days_ramping_up
+        self.n_days_ramping_down = config.n_days_ramping_down
+        self.idle_costs = config.idle_costs
+        self.k = config.k
+
+        # Results placeholders
+        self.cashflows: Optional[np.ndarray] = None
+        self.value: Optional[np.ndarray] = None
+        self.optimal_control_decision: Optional[np.ndarray] = None
+        self.optimal_value: Optional[np.ndarray] = None
+
+    @staticmethod
+    def get_next_state(
+            current_optimal_state: OperationalState, optimal_control: OptimalControl
+    ) -> OperationalState:
+        """
+        Get the next operational state based on the current state and optimal control decision.
 
         Args:
-            operation_costs (float): Fixed operational costs of the power plant.
-            alpha (float): Coefficient for operational cost factor.
-            ramping_up_costs (float): Costs associated with ramping up operations.
-            ramping_down_costs (float): Costs associated with ramping down operations.
-            idle_costs (float): Costs associated with being idle.
-            simulation_start (date): Start date for the market simulation.
-            simulation_end (date): End date for the market simulation.
-            power_volatility (float): Volatility of the Power prices.
-            coal_volatility (float): Volatility of the Coal prices.
-            correlation (float): Correlation between the Power and Coal price shocks.
-            fwd_curve_power (pd.Series): Forward curve for Power with monthly granularity.
-            fwd_curve_coal (pd.Series): Forward curve for Coal with monthly granularity.
-            sigma_ou_power (float): Volatility for the mean-reverting Ornstein-Uhlenbeck process for power.
-            sigma_ou_coal (float): Volatility for the mean-reverting Ornstein-Uhlenbeck process for coal.
-            beta_power (float): Mean-reversion speed for the power price process.
-            beta_coal (float): Mean-reversion speed for the coal price process.
-            k (int): Polynomial degree for regression (default is 3).
+            current_optimal_state (OperationalState): The current state of the power plant.
+            optimal_control (OptimalControl): The optimal control decision for the next step.
+
+        Returns:
+            OperationalState: The next operational state after applying the optimal control decision.
         """
-        self.operation_costs = operation_costs
-        self.alpha = alpha
-        self.ramping_up_costs = ramping_up_costs
-        self.ramping_down_costs = ramping_down_costs
-        self.n_days_rampgin_up = n_days_rampgin_up
-        self.n_days_rampgin_down = n_days_rampgin_down
-        self.idle_costs = idle_costs
+        if current_optimal_state == OperationalState.IDLE:
+            if optimal_control == OptimalControl.RAMPING_UP:
+                return OperationalState.RAMPING_UP
+            else:
+                return OperationalState.IDLE  # Do Nothing remains in IDLE
 
-        self.k = k
+        elif current_optimal_state == OperationalState.RAMPING_UP:
+            return OperationalState.RUNNING
 
-        # Initialize the MarketSimulation object with the provided parameters
-        self.market_simulation = MarketSimulation(
-            simulation_start,
-            simulation_end,
-            power_volatility,
-            coal_volatility,
-            correlation,
-            fwd_curve_power,
-            fwd_curve_coal,
-            sigma_ou_power,
-            sigma_ou_coal,
-            beta_power,
-            beta_coal,
-        )
+        elif current_optimal_state == OperationalState.RUNNING:
+            if optimal_control == OptimalControl.RAMPING_DOWN:
+                return OperationalState.RAMPING_DOWN
+            else:  # DO_NOTHING
+                return OperationalState.RUNNING  # Stay running
+
+        elif current_optimal_state == OperationalState.RAMPING_DOWN:
+            return OperationalState.IDLE
 
     def _initialize_terminal_state(self) -> None:
         """Initializes the terminal state (end of simulation), setting the cashflows and values for the last day of simulation.

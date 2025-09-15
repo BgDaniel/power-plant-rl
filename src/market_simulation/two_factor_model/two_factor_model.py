@@ -51,12 +51,16 @@ class TwoFactorForwardModel:
             else:
                 raise ValueError("Either params or config_path must be provided.")
 
-        self.params = params
+        # --- Two-factor params ---
         self.sigma_s = params.sigma_s
         self.kappa_s = params.kappa_s
         self.sigma_l = params.sigma_l
         self.kappa_l = params.kappa_l
         self.rho = params.rho
+
+        # --- Day-ahead OU params ---
+        self.beta = params.beta
+        self.kappa = params.kappa
 
         # Cholesky decomposition for correlation
         corr_matrix = np.array([[1.0, self.rho], [self.rho, 1.0]])
@@ -92,10 +96,12 @@ class TwoFactorForwardModel:
 
         # Integral-based variance contributions
         var_s = (self.sigma_s**2 / (2 * self.kappa_s)) * (
-            np.exp(-2 * self.kappa_s * (cap_t - t)) - np.exp(-2 * self.kappa_s * (cap_t - t_0))
+            np.exp(-2 * self.kappa_s * (cap_t - t))
+            - np.exp(-2 * self.kappa_s * (cap_t - t_0))
         )
         var_l = (self.sigma_l**2 / (2 * self.kappa_l)) * (
-            np.exp(-2 * self.kappa_l * (cap_t - t)) - np.exp(-2 * self.kappa_l * (cap_t - t_0))
+            np.exp(-2 * self.kappa_l * (cap_t - t))
+            - np.exp(-2 * self.kappa_l * (cap_t - t_0))
         )
         var_cross = (
             2 * self.rho * self.sigma_s * self.sigma_l / (self.kappa_s + self.kappa_l)
@@ -124,7 +130,7 @@ class TwoFactorForwardModel:
         total_vol = np.sqrt(vol_s**2 + vol_l**2 + vol_cross)
 
         # Set total_vol to NaN where tau < 0
-        total_vol = np.where(tau < 0, np.nan, total_vol)
+        total_vol = np.where(self.simulation_days >= maturity_date, np.nan, total_vol)
 
         return pd.Series(total_vol, index=self.simulation_days)
 
@@ -134,6 +140,53 @@ class TwoFactorForwardModel:
         """
         log_vars = self.log_var(maturity_date)
         return fwd_0**2 * (np.exp(log_vars) - 1)
+
+    def _simulate_day_ahead(
+        self, month_ahead: xr.DataArray, n_sims: int
+    ) -> xr.DataArray:
+        """
+        Simulate day-ahead prices by applying an OU process to month-ahead forwards.
+
+        Parameters
+        ----------
+        month_ahead : xr.DataArray
+            Month-ahead simulated series.
+        n_sims : int
+            Number of simulation paths.
+
+        Returns
+        -------
+        xr.DataArray
+            Day-ahead simulated series with same shape as month_ahead.
+        """
+        n_steps = len(self.simulation_days)
+        dt = DT
+
+        # OU process in log-space
+        x = np.zeros((n_sims, n_steps))
+        dw = np.random.normal(scale=np.sqrt(dt), size=(n_sims, n_steps - 1))
+
+        for t in range(1, n_steps):
+            x[:, t] = (
+                x[:, t - 1] * np.exp(-self.kappa * dt)
+                + self.beta
+                * np.sqrt(1 - np.exp(-2 * self.kappa * dt))
+                / np.sqrt(2 * self.kappa)
+                * dw[:, t - 1]
+            )
+
+        exp_X = np.exp(x)
+        day_ahead_vals = month_ahead.values * exp_X
+
+        return xr.DataArray(
+            day_ahead_vals,
+            dims=[SIMULATION_PATH, SIMULATION_DAY],
+            coords={
+                SIMULATION_PATH: month_ahead[SIMULATION_PATH],
+                SIMULATION_DAY: month_ahead[SIMULATION_DAY],
+            },
+            name="day_ahead",
+        )
 
     def simulate(self, fwd_0: pd.Series, n_sims: int) -> xr.DataArray:
         """

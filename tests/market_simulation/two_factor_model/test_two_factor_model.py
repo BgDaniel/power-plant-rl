@@ -44,7 +44,7 @@ def example_model_and_data() -> tuple:
     fwd_0 = pd.Series(fwd_values, index=fwd_dates)
 
     # Simulation
-    n_sims = 1000
+    n_sims = 5000
     fwds, _ = two_factor_model.simulate(fwd_0=fwd_0, n_sims=n_sims)
 
     return two_factor_model, fwd_0, simulation_days, fwds
@@ -59,7 +59,7 @@ class TestTwoFactorForwardModel:
     def _bootstrap_ci(
         values: pd.DataFrame,
         func: callable,
-        n_resample: int = 2500,
+        n_resample: int = 1000,
         percentiles: tuple[float, float] = (1, 5),
     ) -> dict[int, dict[str, pd.Series]]:
         """
@@ -195,7 +195,7 @@ class TestTwoFactorForwardModel:
     def test_instant_fwd_vol(self, example_model_and_data: tuple) -> None:
         self._generic_test(
             example_model_and_data,
-            delivery_start=pd.Timestamp("2025-12-01"),
+            delivery_start=pd.Timestamp("2026-03-01"),
             empirical_func=instant_fwd_vol,
             analytical_func=lambda model, fwd_0, delivery_start: model.instant_fwd_vol(
                 maturity_date=delivery_start - pd.Timedelta(days=1)
@@ -207,7 +207,7 @@ class TestTwoFactorForwardModel:
     def test_log_var(self, example_model_and_data: tuple) -> None:
         self._generic_test(
             example_model_and_data,
-            delivery_start=pd.Timestamp("2025-12-01"),
+            delivery_start=pd.Timestamp("2026-03-01"),
             empirical_func=log_var,
             analytical_func=lambda model, fwd_0, delivery_start: model.log_var(
                 maturity_date=delivery_start - pd.Timedelta(days=1)
@@ -219,7 +219,7 @@ class TestTwoFactorForwardModel:
     def test_var(self, example_model_and_data: tuple) -> None:
         self._generic_test(
             example_model_and_data,
-            delivery_start=pd.Timestamp("2025-12-01"),
+            delivery_start=pd.Timestamp("2026-03-01"),
             empirical_func=lambda sample: sample.var(axis=1, ddof=1),
             analytical_func=lambda model, fwd_0, delivery_start: model.var(
                 fwd_0, maturity_date=delivery_start - pd.Timedelta(days=1)
@@ -229,13 +229,29 @@ class TestTwoFactorForwardModel:
         )
 
     def test_mean(self, example_model_and_data: tuple) -> None:
-        self._generic_test(
-            example_model_and_data,
-            delivery_start=pd.Timestamp("2025-12-01"),
-            empirical_func=lambda sample: sample.mean(axis=1),
-            analytical_func=lambda model, fwd_0, delivery_start: pd.Series(
-                fwd_0.loc[delivery_start], index=sim_days
-            ),
-            title="Mean Fwd",
-            name="mean",
+        """
+        Test that the simulated forward mean matches the initial forward curve.
+        """
+        model, fwd_0, simulation_days, fwds = example_model_and_data
+        delivery_start = pd.Timestamp("2026-03-01")
+
+        # Extract simulated forward values for the delivery month
+        fwd_values = fwds.sel({DELIVERY_START: delivery_start})
+
+        sim_df = pd.DataFrame(fwd_values.T, index=simulation_days)  # rows=time, cols=sims
+
+        # Empirical mean across simulations
+        empirical_series = sim_df.mean(axis=1)
+
+        # Analytical mean: in a risk-neutral OU/two-factor model, mean is the initial forward
+        analytical_series = pd.Series(
+            fwd_0.loc[delivery_start], index=simulation_days
+        )
+
+        # Simple relative difference check
+        assert_relative_difference(
+            empirical_series,
+            analytical_series,
+            max_diff=0.01,
+            name="mean_forward_price"
         )
