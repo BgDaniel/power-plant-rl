@@ -22,8 +22,10 @@ class SpreadModel:
 
     def __init__(
         self,
-        params_two_factors_1: Optional[TwoFactorModelConfig] = None,
-        params_two_factors_2: Optional[TwoFactorModelConfig] = None,
+        as_of_date: pd.Timestamp,
+        simulation_days: pd.DatetimeIndex,
+        params_two_factor_power_model: Optional[TwoFactorModelConfig] = None,
+        params_two_factors_coal_model: Optional[TwoFactorModelConfig] = None,
         rho_long: Optional[float] = None,
         config_path: Optional[str] = None,
     ) -> None:
@@ -32,9 +34,9 @@ class SpreadModel:
 
         Parameters
         ----------
-        params_two_factors_1 : TwoFactorModelConfig, optional
+        params_two_factor_power_model : TwoFactorModelConfig, optional
             Parameters for the first underlying model.
-        params_two_factors_2 : TwoFactorModelConfig, optional
+        params_two_factors_coal_model : TwoFactorModelConfig, optional
             Parameters for the second underlying model.
         rho_long : float, optional
             Long-term correlation between the two models.
@@ -42,17 +44,23 @@ class SpreadModel:
             Path to a JSON SpreadModel configuration file. If provided, this
             overrides the individual parameter objects.
         """
+        if simulation_days[0] != as_of_date:
+            raise ValueError("as_of_date must equal the first simulation day")
+
+        self.as_of_date = as_of_date
+        self.simulation_days = simulation_days
+
         if config_path is not None:
             # Load config from JSON
             spread_config = SpreadModelConfig.from_json(config_path)
-            params_two_factors_1 = spread_config.model1_config
-            params_two_factors_2 = spread_config.model2_config
+            params_two_factor_power_model = spread_config.model1_config
+            params_two_factors_coal_model = spread_config.model2_config
             rho_long = spread_config.rho_long
 
         # Validate that all required parameters are provided
         if (
-            params_two_factors_1 is None
-            or params_two_factors_2 is None
+            params_two_factor_power_model is None
+            or params_two_factors_coal_model is None
             or rho_long is None
         ):
             raise ValueError(
@@ -61,21 +69,25 @@ class SpreadModel:
             )
 
         # Instantiate underlying two-factor models
-        self.model1 = TwoFactorForwardModel(params=params_two_factors_1)
-        self.model2 = TwoFactorForwardModel(params=params_two_factors_2)
+        self.two_factor_power_model = TwoFactorForwardModel(
+            params=params_two_factor_power_model
+        )
+        self.two_factor_coal_model = TwoFactorForwardModel(
+            params=params_two_factors_coal_model
+        )
         self.rho_long = rho_long
 
     def _generate_dW_values(self, n_sims: int, n_steps: int) -> np.ndarray:
         dW_indep = np.random.normal(size=(n_sims, n_steps - 1, 4))
 
-        rho1 = self.model1.rho
-        rho2 = self.model2.rho
+        rho_power = self.two_factor_power_model.rho
+        rho_coal = self.two_factor_coal_model.rho
         corr_matrix = np.array(
             [
-                [1.0, rho1, 0.0, 0.0],
-                [rho1, 1.0, 0.0, self.rho_long],
-                [0.0, 0.0, 1.0, rho2],
-                [0.0, self.rho_long, rho2, 1.0],
+                [1.0, rho_power, 0.0, 0.0],
+                [rho_power, 1.0, 0.0, self.rho_long],
+                [0.0, 0.0, 1.0, rho_coal],
+                [0.0, self.rho_long, rho_coal, 1.0],
             ]
         )
 
@@ -85,56 +97,34 @@ class SpreadModel:
 
     def simulate(
         self,
-        F0_1: pd.Series,
-        F0_2: pd.Series,
-        simulation_days: pd.DatetimeIndex,
+        power_fwd_0: pd.Series,
+        coal_fwd_0: pd.Series,
         n_sims: int,
     ) -> tuple[xr.DataArray, xr.DataArray, xr.DataArray, xr.DataArray]:
         n_steps = len(simulation_days)
         dW_values = self._generate_dW_values(n_sims, n_steps)
 
         # override underlying models' generate_dW_values
-        self.model1.generate_dW_values = lambda n_s, n_t: dW_values[:, :, :2]
-        self.model2.generate_dW_values = lambda n_s, n_t: dW_values[:, :, 2:]
+        self.two_factor_power_model.generate_dW_values = lambda n_s, n_t: dW_values[
+            :, :, :2
+        ]
+        self.two_factor_coal_model.generate_dW_values = lambda n_s, n_t: dW_values[
+            :, :, 2:
+        ]
 
         # simulate both models
-        fwds_1, month_ahead_1 = self.model1.simulate(
-            F0=F0_1, n_sims=n_sims, simulation_days=simulation_days
+        power_fwd, power_month_ahead, power_day_ahead = (
+            self.two_factor_power_model.simulate(fwd_0=power_fwd_0, n_sims=n_sims)
         )
-        fwds_2, month_ahead_2 = self.model2.simulate(
-            F0=F0_2, n_sims=n_sims, simulation_days=simulation_days
+        coal_fwd, coal_month_ahead, coal_day_ahead = (
+            self.two_factor_coal_model.simulate(fwd_0=coal_fwd_0, n_sims=n_sims)
         )
 
-        return fwds_1, month_ahead_1, fwds_2, month_ahead_2
-
-
-# -------------------------------
-# Run as script
-# -------------------------------
-if __name__ == "__main__":
-    # Example parameters
-    params1 = dict(
-        mu=0.01, sigma_s=0.05, kappa_s=1.0, sigma_l=0.02, kappa_l=0.1, rho=0.3
-    )
-    params2 = dict(
-        mu=0.02, sigma_s=0.04, kappa_s=0.8, sigma_l=0.03, kappa_l=0.05, rho=0.2
-    )
-    rho_long = 0.5
-
-    model = SpreadModel(params1, params2, rho_long=rho_long)
-
-    start_date = pd.Timestamp("2025-09-13")
-    n_rel_fwds = 6
-    fwd_dates = pd.date_range(start=start_date, periods=n_rel_fwds, freq="MS")
-    F0_1 = pd.Series(data=50 + np.arange(n_rel_fwds), index=fwd_dates)
-    F0_2 = pd.Series(data=60 + np.arange(n_rel_fwds), index=fwd_dates)
-
-    simulation_days = pd.date_range(start=start_date, periods=30, freq="D")
-    n_sims = 500
-
-    fwds_1, month_ahead_1, fwds_2, month_ahead_2 = model.simulate(
-        F0_1, F0_2, simulation_days, n_sims
-    )
-
-    print("Model 1 simulated forwards shape:", fwds_1.shape)
-    print("Model 2 simulated forwards shape:", fwds_2.shape)
+        return (
+            power_fwd,
+            power_month_ahead,
+            power_day_ahead,
+            coal_fwd,
+            coal_month_ahead,
+            coal_day_ahead,
+        )

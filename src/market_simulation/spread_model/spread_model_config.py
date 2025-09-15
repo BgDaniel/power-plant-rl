@@ -6,9 +6,9 @@ from market_simulation.two_factor_model.two_factor_model import TwoFactorModelCo
 CONFIG_FOLDER_ENV = "CONFIG_FOLDER"  # Environment variable for config folder
 
 # String constants for JSON keys
-MODEL_1_KEY = "model_1"
-MODEL_2_KEY = "model_2"
-RHO_LONG_KEY = "rho_long"
+POWER = "power"
+COAL = "coal"
+RHO_LONG = "rho_long"
 
 
 class SpreadModelConfig:
@@ -78,14 +78,14 @@ class SpreadModelConfig:
 
         # Check required keys
         missing_keys = [
-            k for k in [MODEL_1_KEY, MODEL_2_KEY, RHO_LONG_KEY] if k not in data
+            k for k in [POWER, COAL, RHO_LONG] if k not in data
         ]
         if missing_keys:
             raise ValueError(f"Missing keys in SpreadModel JSON config: {missing_keys}")
 
         # Build full paths to the two-factor model config files
-        model1_path = Path(env_path) / data[MODEL_1_KEY]
-        model2_path = Path(env_path) / data[MODEL_2_KEY]
+        model1_path = Path(env_path) / data[POWER]
+        model2_path = Path(env_path) / data[COAL]
 
         # Load the individual TwoFactorModelConfig objects
         model1_config = TwoFactorModelConfig.from_json(str(model1_path))
@@ -94,5 +94,5 @@ class SpreadModelConfig:
         return cls(
             model1_config=model1_config,
             model2_config=model2_config,
-            rho_long=float(data[RHO_LONG_KEY]),
+            rho_long=float(data[RHO_LONG]),
         )

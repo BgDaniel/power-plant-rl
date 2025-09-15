@@ -13,7 +13,9 @@ from tests.test_helpers import assert_relative_difference
 # Pytest fixture
 # -------------------------------
 @pytest.fixture
-def example_model_and_data() -> tuple:
+def example_model_and_data() -> (
+    tuple[TwoFactorForwardModel, pd.Series, pd.DatetimeIndex, "xr.DataArray"]
+):
     """
     Build a TwoFactorForwardModel, generate initial forward curve,
     and simulate multiple paths.
@@ -34,7 +36,7 @@ def example_model_and_data() -> tuple:
     two_factor_model = TwoFactorForwardModel(
         as_of_date=as_of_date,
         simulation_days=simulation_days,
-        config_path="model_config/power_2_factor_model_config.json",
+        config_path="model_configs/power_2_factor_model_config.json",
     )
 
     # Forward curve setup
@@ -45,7 +47,7 @@ def example_model_and_data() -> tuple:
 
     # Simulation
     n_sims = 5000
-    fwds, _ = two_factor_model.simulate(fwd_0=fwd_0, n_sims=n_sims)
+    fwds, _, _ = two_factor_model.simulate(fwd_0=fwd_0, n_sims=n_sims)
 
     return two_factor_model, fwd_0, simulation_days, fwds
 
@@ -53,6 +55,12 @@ def example_model_and_data() -> tuple:
 class TestTwoFactorForwardModel:
     """
     Test suite for the TwoFactorForwardModel using a generic test helper.
+
+    Provides tests for empirical vs analytical statistics including:
+        - instantaneous forward volatility
+        - log variance
+        - variance
+        - mean forward price
     """
 
     @staticmethod
@@ -64,9 +72,25 @@ class TestTwoFactorForwardModel:
     ) -> dict[int, dict[str, pd.Series]]:
         """
         Compute bootstrap confidence intervals from a DataFrame of simulation paths.
+
+        Parameters
+        ----------
+        values : pd.DataFrame
+            DataFrame of simulated values (rows=time, columns=simulations).
+        func : callable
+            Function to apply to each resampled set (e.g., mean, variance).
+        n_resample : int, optional
+            Number of bootstrap resamples (default=1000).
+        percentiles : tuple of float, optional
+            Percentiles to compute lower and upper bounds (default=(1, 5)).
+
+        Returns
+        -------
+        dict[int, dict[str, pd.Series]]
+            Dictionary of confidence intervals for each percentile with keys 'lower' and 'upper'.
         """
         n_days, n_sims = values.shape
-        resampled_results = np.zeros((n_days, n_resample))
+        resampled_results: np.ndarray = np.zeros((n_days, n_resample))
 
         # Resample columns (simulation paths)
         resample_idx = np.random.randint(0, n_sims, size=(n_resample, n_sims))
@@ -95,6 +119,17 @@ class TestTwoFactorForwardModel:
     ) -> None:
         """
         Plot simulation results against analytical benchmarks with confidence intervals.
+
+        Parameters
+        ----------
+        empirical_data : pd.Series
+            Series of empirical statistics from simulations.
+        analytical_data : pd.Series
+            Series of analytical statistics for comparison.
+        conf : dict[int, dict[str, pd.Series]]
+            Bootstrap confidence intervals.
+        title : str
+            Plot title.
         """
         plt.plot(
             empirical_data.index,
@@ -167,10 +202,33 @@ class TestTwoFactorForwardModel:
     ) -> None:
         """
         Generic test helper for empirical vs analytical statistics.
+
+        Parameters
+        ----------
+        example_model_and_data : tuple
+            Tuple containing:
+                - TwoFactorForwardModel
+                - pd.Series (initial forward curve)
+                - pd.DatetimeIndex (simulation days)
+                - xarray.DataArray (simulated forward curves)
+        delivery_start : pd.Timestamp
+            Delivery date to select the forward for testing.
+        empirical_func : callable
+            Function to compute empirical statistics from simulation.
+        analytical_func : callable
+            Function to compute analytical statistics from model.
+        title : str
+            Plot title.
+        name : str
+            Name for the assertion check.
+        max_diff : float, optional
+            Maximum allowed relative difference (default=0.05).
+        n_resample : int, optional
+            Number of bootstrap resamples (default=1000).
         """
         model, fwd_0, simulation_days, fwds = example_model_and_data
-        fwd_values = fwds.sel({DELIVERY_START: delivery_start}).values
-        sim_df = pd.DataFrame(
+        fwd_values: np.ndarray = fwds.sel({DELIVERY_START: delivery_start}).values
+        sim_df: pd.DataFrame = pd.DataFrame(
             fwd_values.T, index=simulation_days
         )  # rows=time, cols=sims
 
@@ -189,10 +247,15 @@ class TestTwoFactorForwardModel:
             empirical_series, analytical_series, max_diff=max_diff, name=name
         )
 
-    # -------------------------------
-    # Individual test cases
-    # -------------------------------
     def test_instant_fwd_vol(self, example_model_and_data: tuple) -> None:
+        """
+        Test instantaneous forward volatility against analytical formula.
+
+        Parameters
+        ----------
+        example_model_and_data : tuple
+            Tuple of model, initial forward, simulation days, and simulated forwards.
+        """
         self._generic_test(
             example_model_and_data,
             delivery_start=pd.Timestamp("2026-03-01"),
@@ -205,6 +268,14 @@ class TestTwoFactorForwardModel:
         )
 
     def test_log_var(self, example_model_and_data: tuple) -> None:
+        """
+        Test log variance of simulated forwards against analytical formula.
+
+        Parameters
+        ----------
+        example_model_and_data : tuple
+            Tuple of model, initial forward, simulation days, and simulated forwards.
+        """
         self._generic_test(
             example_model_and_data,
             delivery_start=pd.Timestamp("2026-03-01"),
@@ -217,6 +288,14 @@ class TestTwoFactorForwardModel:
         )
 
     def test_var(self, example_model_and_data: tuple) -> None:
+        """
+        Test variance of simulated forwards against analytical formula.
+
+        Parameters
+        ----------
+        example_model_and_data : tuple
+            Tuple of model, initial forward, simulation days, and simulated forwards.
+        """
         self._generic_test(
             example_model_and_data,
             delivery_start=pd.Timestamp("2026-03-01"),
@@ -231,27 +310,41 @@ class TestTwoFactorForwardModel:
     def test_mean(self, example_model_and_data: tuple) -> None:
         """
         Test that the simulated forward mean matches the initial forward curve.
+
+        In a risk-neutral two-factor Ornstein-Uhlenbeck model, the expected value of
+        the forward at a given delivery date remains the initial forward curve value
+        up to the maturity date. After the delivery start, values are set to NaN
+        for analytical comparison.
+
+        Parameters
+        ----------
+        example_model_and_data : tuple
+            Tuple containing:
+                - TwoFactorForwardModel : calibrated model instance
+                - pd.Series : initial forward curve
+                - pd.DatetimeIndex : simulation days
+                - xarray.DataArray : simulated forward curves
         """
         model, fwd_0, simulation_days, fwds = example_model_and_data
-        delivery_start = pd.Timestamp("2026-03-01")
+        delivery_start: pd.Timestamp = pd.Timestamp("2026-03-01")
 
         # Extract simulated forward values for the delivery month
-        fwd_values = fwds.sel({DELIVERY_START: delivery_start})
+        fwd_values: xr.DataArray = fwds.sel({DELIVERY_START: delivery_start})
 
-        sim_df = pd.DataFrame(fwd_values.T, index=simulation_days)  # rows=time, cols=sims
+        sim_df: pd.DataFrame = pd.DataFrame(
+            fwd_values.T, index=simulation_days
+        )  # rows=time, cols=sims
 
         # Empirical mean across simulations
-        empirical_series = sim_df.mean(axis=1)
+        empirical_mean: pd.Series = sim_df.mean(axis=1)
 
         # Analytical mean: in a risk-neutral OU/two-factor model, mean is the initial forward
-        analytical_series = pd.Series(
-            fwd_0.loc[delivery_start], index=simulation_days
+        analytical_mean: pd.Series = pd.Series(
+            [[fwd_0] if d < delivery_start else float("nan") for d in simulation_days],
+            index=simulation_days,
         )
 
         # Simple relative difference check
         assert_relative_difference(
-            empirical_series,
-            analytical_series,
-            max_diff=0.01,
-            name="mean_forward_price"
+            empirical_mean, analytical_mean, max_diff=0.01, name="mean_forward_price"
         )

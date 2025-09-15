@@ -245,7 +245,9 @@ class TwoFactorForwardModel:
 
         month_ahead = extract_month_ahead(fwds)
 
-        return fwds, month_ahead
+        day_ahead = None
+
+        return fwds, month_ahead, day_ahead
 
 
 if __name__ == "__main__":

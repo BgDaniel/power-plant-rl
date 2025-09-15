@@ -1,5 +1,7 @@
 from datetime import date
-from enum import Enum
+import xarray as xr
+from typing import Optional
+
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -7,13 +9,12 @@ import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 
-from market_simulation import MarketSimulation
-
+from forward_curve.forward_curve import ForwardCurve
+from market_simulation.spread_model.spread_model import SpreadModel
 from valuation.operations_states import OperationalState
 from valuation.operational_control import OptimalControl
 
-
-
+from valuation.power_plant.power_plant_config import PowerPlantConfig
 
 
 class PowerPlant:
@@ -24,10 +25,10 @@ class PowerPlant:
 
     def __init__(
         self,
-        power_fwd_prices: xr.DataArray,
-        coal_fwd_prices: xr.DataArray,
-        power_day_ahead_prices: pd.DataFrame,
-        coal_day_ahead_prices: pd.DataFrame,
+        power_fwd: xr.DataArray,
+        coal_fwd: xr.DataArray,
+        power_day_ahead: pd.DataFrame,
+        coal_day_ahead: pd.DataFrame,
         config: Optional[PowerPlantConfig] = None,
         config_path: Optional[str] = None,
     ) -> None:
@@ -36,13 +37,13 @@ class PowerPlant:
 
         Parameters
         ----------
-        power_fwd_prices : xr.DataArray
+        power_fwd : xr.DataArray
             Forward prices for power (simulated).
-        coal_fwd_prices : xr.DataArray
+        coal_fwd : xr.DataArray
             Forward prices for coal (simulated).
-        power_day_ahead_prices : pd.DataFrame
+        power_day_ahead : pd.DataFrame
             Day-ahead power prices (simulated).
-        coal_day_ahead_prices : pd.DataFrame
+        coal_day_ahead : pd.DataFrame
             Day-ahead coal prices (simulated).
         config : PowerPlantConfig, optional
             Operational parameter configuration.
@@ -56,10 +57,10 @@ class PowerPlant:
                 raise ValueError("Either config or config_path must be provided.")
 
         # Market data
-        self.power_fwd_prices = power_fwd_prices
-        self.coal_fwd_prices = coal_fwd_prices
-        self.power_day_ahead_prices = power_day_ahead_prices
-        self.coal_day_ahead_prices = coal_day_ahead_prices
+        self.power_fwd_prices = power_fwd
+        self.coal_fwd_prices = coal_fwd
+        self.power_day_ahead_prices = power_day_ahead
+        self.coal_day_ahead_prices = coal_day_ahead
 
         # Operational parameters
         self.config = config
@@ -80,7 +81,7 @@ class PowerPlant:
 
     @staticmethod
     def get_next_state(
-            current_optimal_state: OperationalState, optimal_control: OptimalControl
+        current_optimal_state: OperationalState, optimal_control: OptimalControl
     ) -> OperationalState:
         """
         Get the next operational state based on the current state and optimal control decision.
@@ -517,88 +518,52 @@ class PowerPlant:
 
 # Example usage of the PowerPlant class:
 if __name__ == "__main__":
-    # Simulation parameters
-    simulation_start = date(2024, 1, 1)
-    simulation_end = date(2024, 12, 31)
-    power_volatility = 0.2  # 20% annualized volatility
-    coal_volatility = 0.25  # 15% annualized volatility
-    correlation = 0.7  # Positive correlation
+    config_path_spread_model = "config/spread_model.json"
 
-    # Power curve rises faster than coal but starts lower
-    fwd_curve_power = pd.Series(
-        data=[
-            80,
-            83,
-            86,
-            89,
-            92,
-            95,
-            100,
-            105,
-            110,
-            115,
-            120,
-            125,
-        ],  # Power rises over time
-        index=pd.period_range(start="2024-01", end="2024-12", freq="M"),
+    as_of_date = pd.Timestamp("2025-09-13")
+    n_days = 365
+
+    simulation_start = as_of_date
+    simulation_end = simulation_start + pd.Timedelta(days=365)
+
+    simulation_days = pd.date_range(
+        start=simulation_start, end=simulation_end, freq="D"
     )
 
-    # Coal curve falls over time, but starts higher
-    fwd_curve_coal = pd.Series(
-        data=[
-            120,
-            128,
-            116,
-            104,
-            95,
-            85,
-            70,
-            95,
-            114,
-            120,
-            130,
-            110,
-        ],  # Coal falls over time
-        index=pd.period_range(start="2024-01", end="2024-12", freq="M"),
+    spread_model = SpreadModel(
+        as_of_date, simulation_days, config_path=config_path_spread_model
     )
 
-    # Parameters for the mean-reverting OU process
-    sigma_ou_power = 0.05
-    sigma_ou_coal = 0.07
-    beta_power = 10.0
-    beta_coal = 15.0
+    n_sims = 1000
 
-    # Operational costs
-    operation_costs = 2  # Example value
-    alpha = 1.0
-    beta = 1.0
-    ramping_up_costs = 4
-    ramping_down_costs = 3
-    idle_costs = 0.02
+    power_fwd_0 = ForwardCurve.generate_curve(
+        as_of_date=as_of_date,
+        start_date=simulation_start,
+        end_date=simulation_end,
+        start_value=80.0,
+        end_value=110.0,
+        name="Power Forward Curve",
+    )
 
-    n_days_ramping_up = 1
-    n_days_ramping_down = 1
+    coal_fwd_0 = ForwardCurve.generate_curve(
+        as_of_date=as_of_date,
+        start_date=simulation_start,
+        end_date=simulation_end,
+        start_value=60.0,
+        end_value=85.0,
+        name="Coal Forward Curve",
+    )
 
-    # Create the PowerPlant object
+    power_fwd, _, power_day_ahead, coal_fwd, _, coal_day_ahead = spread_model.simulate(
+        power_fwd_0=power_fwd_0, coal_fwd_0=coal_fwd_0, n_sims=n_sims
+    )
+
     power_plant = PowerPlant(
-        operation_costs,
-        alpha,
-        ramping_up_costs,
-        ramping_down_costs,
-        n_days_ramping_up,
-        n_days_ramping_down,
-        idle_costs,
-        simulation_start,
-        simulation_end,
-        power_volatility,
-        coal_volatility,
-        correlation,
-        fwd_curve_power,
-        fwd_curve_coal,
-        sigma_ou_power,
-        sigma_ou_coal,
-        beta_power,
-        beta_coal,
+        power_fwd=power_fwd,
+        coal_fwd=coal_fwd,
+        power_day_ahead=power_day_ahead,
+        coal_day_ahead=coal_day_ahead,
+        config_path="asset_configs/power_plant_config.json",
     )
 
     # Run the simulation
