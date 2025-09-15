@@ -2,10 +2,6 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from typing import Optional
-from dataclasses import dataclass
-import json
-from pathlib import Path
-import os
 
 from src.market_simulation.market_helpers import extract_month_ahead, yfr
 from src.market_simulation.constants import (
@@ -14,7 +10,10 @@ from src.market_simulation.constants import (
     DT,
     DELIVERY_START,
     FWD_CURVE,
-    CONFIG_FOLDER,
+)
+
+from src.market_simulation.two_factor_model.two_factor_model_config import (
+    TwoFactorModelConfig,
 )
 
 
@@ -23,7 +22,7 @@ class TwoFactorForwardModel:
         self,
         as_of_date: pd.Timestamp,
         simulation_days: pd.DatetimeIndex,
-        params: Optional[TwoFactorModelParameters] = None,
+        params: Optional[TwoFactorModelConfig] = None,
         config_path: Optional[str] = None,
     ) -> None:
         """
@@ -48,7 +47,7 @@ class TwoFactorForwardModel:
 
         if params is None:
             if config_path is not None:
-                params = TwoFactorModelParameters.from_json(config_path)
+                params = TwoFactorModelConfig.from_json(config_path)
             else:
                 raise ValueError("Either params or config_path must be provided.")
 
@@ -63,40 +62,70 @@ class TwoFactorForwardModel:
         corr_matrix = np.array([[1.0, self.rho], [self.rho, 1.0]])
         self.chol = np.linalg.cholesky(corr_matrix)
 
+    def generate_dW(self, n_sims: int, n_steps: int) -> np.ndarray:
+        """
+        Generate independent standard normal shocks and apply correlation.
+
+        Parameters
+        ----------
+        n_sims : int
+            Number of simulation paths.
+        n_steps : int
+            Number of time steps (days).
+
+        Returns
+        -------
+        np.ndarray
+            Correlated shocks with shape (n_sims, n_steps-1, 2).
+        """
+        dW_indep = np.random.normal(size=(n_sims, n_steps - 1, 2))
+        # Apply correlation vectorized
+        return np.einsum("ab,sfb->sfa", self.chol, dW_indep)
+
     def log_var(self, maturity_date: pd.Timestamp) -> pd.Series:
         """
         Compute log-forward variance for each simulation day relative to maturity.
         """
-        tau = np.array([yfr(d, maturity_date) for d in self.simulation_days])
-        tau = np.maximum(tau, 0.0)
+        t_0 = 0.0
+        t = np.array([yfr(self.as_of_date, d) for d in self.simulation_days])
+        cap_t = yfr(self.as_of_date, maturity_date)
 
+        # Integral-based variance contributions
         var_s = (self.sigma_s**2 / (2 * self.kappa_s)) * (
-            1 - np.exp(-2 * self.kappa_s * tau)
+            np.exp(-2 * self.kappa_s * (cap_t - t)) - np.exp(-2 * self.kappa_s * (cap_t - t_0))
         )
         var_l = (self.sigma_l**2 / (2 * self.kappa_l)) * (
-            1 - np.exp(-2 * self.kappa_l * tau)
+            np.exp(-2 * self.kappa_l * (cap_t - t)) - np.exp(-2 * self.kappa_l * (cap_t - t_0))
         )
         var_cross = (
             2 * self.rho * self.sigma_s * self.sigma_l / (self.kappa_s + self.kappa_l)
-        ) * (1 - np.exp(-(self.kappa_s + self.kappa_l) * tau))
+        ) * (
+            np.exp(-(self.kappa_s + self.kappa_l) * (cap_t - t))
+            - np.exp(-(self.kappa_s + self.kappa_l) * (cap_t - t_0))
+        )
 
         total_var = var_s + var_l + var_cross
-        total_var = np.maximum(total_var, 0.0)
+
+        # Set variance to NaN for simulation days >= maturity_date
+        total_var = np.where(self.simulation_days >= maturity_date, np.nan, total_var)
 
         return pd.Series(total_var, index=self.simulation_days)
 
-    def instantaneous_forward_vol(self, maturity_date: pd.Timestamp) -> pd.Series:
+    def instant_fwd_vol(self, maturity_date: pd.Timestamp) -> pd.Series:
         """
         Compute instantaneous forward volatility for each simulation day relative to maturity.
         """
         tau = np.array([yfr(d, maturity_date) for d in self.simulation_days])
-        tau = np.maximum(tau, 0.0)
 
         vol_s = self.sigma_s * np.exp(-self.kappa_s * tau)
         vol_l = self.sigma_l * np.exp(-self.kappa_l * tau)
         vol_cross = 2 * self.rho * vol_s * vol_l
 
         total_vol = np.sqrt(vol_s**2 + vol_l**2 + vol_cross)
+
+        # Set total_vol to NaN where tau < 0
+        total_vol = np.where(tau < 0, np.nan, total_vol)
+
         return pd.Series(total_vol, index=self.simulation_days)
 
     def var(self, fwd_0: float, maturity_date: pd.Timestamp) -> pd.Series:
@@ -133,7 +162,7 @@ class TwoFactorForwardModel:
 
             for t in range(1, n_steps):
                 current_date = self.simulation_days[t]
-                if current_date > maturity:
+                if current_date >= maturity:
                     break
 
                 tau = yfr(current_date, maturity)
@@ -165,6 +194,7 @@ class TwoFactorForwardModel:
 
         return fwds, month_ahead
 
+
 if __name__ == "__main__":
     # Simulation setup
     as_of_date = pd.Timestamp("2025-09-13")
@@ -175,7 +205,7 @@ if __name__ == "__main__":
     two_factor_model = TwoFactorForwardModel(
         as_of_date=as_of_date,
         simulation_days=simulation_days,
-        config_path="power_2_factor_model_config.json"
+        config_path="power_2_factor_model_config.json",
     )
 
     # Forward curve setup

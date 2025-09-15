@@ -1,8 +1,13 @@
 import numpy as np
 import pandas as pd
 import xarray as xr
-from typing import Optional, Dict
-from market_simulation.two_factor_model import TwoFactorForwardModel
+from typing import Dict
+from typing import Optional
+from market_simulation.two_factor_model.two_factor_model import TwoFactorForwardModel
+from market_simulation.two_factor_model.two_factor_model_config import (
+    TwoFactorModelConfig,
+)
+from market_simulation.spread_model.spread_model_config import SpreadModelConfig
 
 SIMULATION = "simulation"
 DAY = "day"
@@ -10,14 +15,54 @@ REL_FWD = "relative_forward"
 
 
 class SpreadModel:
+    """
+    Spread model consisting of two underlying two-factor forward models
+    with a long-term correlation factor.
+    """
+
     def __init__(
         self,
-        params_two_factors_1: Dict[str, float],
-        params_two_factors_2: Dict[str, float],
-        rho_long: float = 0.0,
+        params_two_factors_1: Optional[TwoFactorModelConfig] = None,
+        params_two_factors_2: Optional[TwoFactorModelConfig] = None,
+        rho_long: Optional[float] = None,
+        config_path: Optional[str] = None,
     ) -> None:
-        self.model1 = TwoFactorForwardModel(**params_two_factors_1)
-        self.model2 = TwoFactorForwardModel(**params_two_factors_2)
+        """
+        Initialize the SpreadModel.
+
+        Parameters
+        ----------
+        params_two_factors_1 : TwoFactorModelConfig, optional
+            Parameters for the first underlying model.
+        params_two_factors_2 : TwoFactorModelConfig, optional
+            Parameters for the second underlying model.
+        rho_long : float, optional
+            Long-term correlation between the two models.
+        config_path : str, optional
+            Path to a JSON SpreadModel configuration file. If provided, this
+            overrides the individual parameter objects.
+        """
+        if config_path is not None:
+            # Load config from JSON
+            spread_config = SpreadModelConfig.from_json(config_path)
+            params_two_factors_1 = spread_config.model1_config
+            params_two_factors_2 = spread_config.model2_config
+            rho_long = spread_config.rho_long
+
+        # Validate that all required parameters are provided
+        if (
+            params_two_factors_1 is None
+            or params_two_factors_2 is None
+            or rho_long is None
+        ):
+            raise ValueError(
+                "Either provide all individual TwoFactorModelConfig objects and rho_long, "
+                "or provide a valid config_path."
+            )
+
+        # Instantiate underlying two-factor models
+        self.model1 = TwoFactorForwardModel(params=params_two_factors_1)
+        self.model2 = TwoFactorForwardModel(params=params_two_factors_2)
         self.rho_long = rho_long
 
     def _generate_dW_values(self, n_sims: int, n_steps: int) -> np.ndarray:

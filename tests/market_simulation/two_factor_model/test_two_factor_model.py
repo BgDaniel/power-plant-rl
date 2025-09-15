@@ -3,16 +3,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-from market_simulation.two_factor_model import TwoFactorForwardModel
+from market_simulation.two_factor_model.two_factor_model import TwoFactorForwardModel
 from market_simulation.market_helpers import DELIVERY_START
-from market_simulation.constants import DT
-from math_helpers import (
-    instantaneous_forward_volatility,
-    log_variance,
-    variance,
-    mean,
-)
-from test_helpers import assert_relative_difference
+from math_helpers import instant_fwd_vol, log_var
+from tests.test_helpers import assert_relative_difference
 
 
 # -------------------------------
@@ -32,22 +26,26 @@ def example_model_and_data() -> tuple:
         - pd.DatetimeIndex : simulation days
         - xarray.DataArray : simulated forward curves (n_sims x n_days x delivery)
     """
-    two_factor_model = TwoFactorForwardModel(
-        config_path="power_2_factor_model_config.json"
-    )
-    start_date = pd.Timestamp("2025-09-13")
-    n_rel_fwds = 6
-    fwd_dates = pd.date_range(start=start_date, periods=n_rel_fwds, freq="MS")
-    fwd_values = 50 + np.arange(n_rel_fwds)
-    fwd_0 = pd.Series(data=fwd_values, index=fwd_dates)
-
+    as_of_date = pd.Timestamp("2025-09-13")
     n_days = 365
-    simulation_days = pd.date_range(start=start_date, periods=n_days, freq="D")
+    simulation_days = pd.date_range(start=as_of_date, periods=n_days, freq="D")
 
-    n_sims = 5000
-    fwds, _ = two_factor_model.simulate(
-        fwd_0=fwd_0, n_sims=n_sims, simulation_days=simulation_days
+    # Model initialization
+    two_factor_model = TwoFactorForwardModel(
+        as_of_date=as_of_date,
+        simulation_days=simulation_days,
+        config_path="model_config/power_2_factor_model_config.json",
     )
+
+    # Forward curve setup
+    n_rel_fwds = 12
+    fwd_dates = pd.date_range(start=as_of_date, periods=n_rel_fwds, freq="MS")
+    fwd_values = 50 + np.arange(n_rel_fwds)
+    fwd_0 = pd.Series(fwd_values, index=fwd_dates)
+
+    # Simulation
+    n_sims = 1000
+    fwds, _ = two_factor_model.simulate(fwd_0=fwd_0, n_sims=n_sims)
 
     return two_factor_model, fwd_0, simulation_days, fwds
 
@@ -178,9 +176,7 @@ class TestTwoFactorForwardModel:
 
         # Compute empirical and analytical series
         empirical_series: pd.Series = empirical_func(sim_df)
-        analytical_series: pd.Series = analytical_func(
-            model, fwd_0, simulation_days, delivery_start
-        )
+        analytical_series: pd.Series = analytical_func(model, fwd_0, delivery_start)
 
         # Compute bootstrap confidence intervals
         conf = self._bootstrap_ci(sim_df, empirical_func, n_resample=n_resample)
@@ -196,39 +192,37 @@ class TestTwoFactorForwardModel:
     # -------------------------------
     # Individual test cases
     # -------------------------------
-    def test_instantaneous_forward_volatility(
-        self, example_model_and_data: tuple
-    ) -> None:
+    def test_instant_fwd_vol(self, example_model_and_data: tuple) -> None:
         self._generic_test(
             example_model_and_data,
             delivery_start=pd.Timestamp("2025-12-01"),
-            empirical_func=instantaneous_forward_volatility,
-            analytical_func=lambda model, fwd_0, sim_days, delivery_start: model.instantaneous_forward_vol(
-                sim_days, delivery_start
+            empirical_func=instant_fwd_vol,
+            analytical_func=lambda model, fwd_0, delivery_start: model.instant_fwd_vol(
+                maturity_date=delivery_start - pd.Timedelta(days=1)
             ),
             title="Inst. Fwd Vol",
             name="instantaneous_forward_volatility",
         )
 
-    def test_log_variance(self, example_model_and_data: tuple) -> None:
+    def test_log_var(self, example_model_and_data: tuple) -> None:
         self._generic_test(
             example_model_and_data,
             delivery_start=pd.Timestamp("2025-12-01"),
-            empirical_func=log_variance,
-            analytical_func=lambda model, fwd_0, sim_days, delivery_start: model.log_var(
-                sim_days, delivery_start
+            empirical_func=log_var,
+            analytical_func=lambda model, fwd_0, delivery_start: model.log_var(
+                maturity_date=delivery_start - pd.Timedelta(days=1)
             ),
             title="Log Fwd Var",
             name="log_variance",
         )
 
-    def test_variance(self, example_model_and_data: tuple) -> None:
+    def test_var(self, example_model_and_data: tuple) -> None:
         self._generic_test(
             example_model_and_data,
             delivery_start=pd.Timestamp("2025-12-01"),
-            empirical_func=variance,
-            analytical_func=lambda model, fwd_0, sim_days, delivery_start: model.var(
-                fwd_0, sim_days, delivery_start
+            empirical_func=lambda sample: sample.var(axis=1, ddof=1),
+            analytical_func=lambda model, fwd_0, delivery_start: model.var(
+                fwd_0, maturity_date=delivery_start - pd.Timedelta(days=1)
             ),
             title="Variance",
             name="variance",
@@ -238,8 +232,8 @@ class TestTwoFactorForwardModel:
         self._generic_test(
             example_model_and_data,
             delivery_start=pd.Timestamp("2025-12-01"),
-            empirical_func=mean,
-            analytical_func=lambda model, fwd_0, sim_days, delivery_start: pd.Series(
+            empirical_func=lambda sample: sample.mean(axis=1),
+            analytical_func=lambda model, fwd_0, delivery_start: pd.Series(
                 fwd_0.loc[delivery_start], index=sim_days
             ),
             title="Mean Fwd",
