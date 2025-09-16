@@ -5,5 +5,5 @@
   "kappa_l": 0.2,
   "rho": 0.6,
   "beta": 0.2,
-  "kappa": 3.0
+  "sigma": 3.0
 }

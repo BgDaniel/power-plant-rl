@@ -518,7 +518,7 @@ class PowerPlant:
 
 # Example usage of the PowerPlant class:
 if __name__ == "__main__":
-    config_path_spread_model = "config/spread_model.json"
+    config_path_spread_model = "model_configs/spread_model.json"
 
     as_of_date = pd.Timestamp("2025-09-13")
     n_days = 365
@@ -534,7 +534,7 @@ if __name__ == "__main__":
         as_of_date, simulation_days, config_path=config_path_spread_model
     )
 
-    n_sims = 1000
+    n_sims = 5
 
     power_fwd_0 = ForwardCurve.generate_curve(
         as_of_date=as_of_date,
@@ -563,7 +563,7 @@ if __name__ == "__main__":
         coal_fwd=coal_fwd,
         power_day_ahead=power_day_ahead,
         coal_day_ahead=coal_day_ahead,
-        config_path="asset_configs/power_plant_config.json",
+        config_path="asset_configs/power_plant_config.yaml",
     )
 
     # Run the simulation

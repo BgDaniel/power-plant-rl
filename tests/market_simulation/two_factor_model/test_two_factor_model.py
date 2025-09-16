@@ -517,7 +517,7 @@ class TestTwoFactorForwardModel:
         )
 
         # Compute empirical mean from simulated day-ahead series
-        day_ahead_values = month_aheads / spots
+        day_ahead_values = spots / month_aheads
         empirical_mean = day_ahead_values.mean(axis=1)
 
         # Compute analytical mean
@@ -570,7 +570,7 @@ class TestTwoFactorForwardModel:
         )
 
         # Compute empirical variance from simulated day-ahead series
-        day_ahead_values = month_aheads / spots
+        day_ahead_values = spots / month_aheads
         empirical_var = day_ahead_values.var(axis=1)
 
         # Compute analytical variance
@@ -597,4 +597,56 @@ class TestTwoFactorForwardModel:
             analytical_var,
             max_diff=max_rel_dev,
             name=observable_name,
+        )
+
+    def test_mean_spot(
+        self,
+        example_model_and_data: tuple,
+        bootstrap_ci: bool = False,
+        max_rel_dev: float = 0.05,
+        plot: bool = True,
+    ):
+        """
+        Test the mean of the exponential OU day-ahead process over multiple simulation dates.
+
+        Parameters
+        ----------
+        example_model_and_data : tuple
+            Tuple of (model, initial forward, simulation days, simulated forwards, month-ahead, spots).
+        bootstrap_ci : bool, optional
+            Whether to compute bootstrap confidence intervals for plotting.
+        max_diff : float, optional
+            Maximum allowed relative difference between empirical and analytical results.
+        plot : bool, optional
+            Whether to produce a plot comparing empirical vs analytical results.
+        """
+        model, fwd_0, simulation_days, fwds, month_aheads, spots = (
+            example_model_and_data
+        )
+
+        # Compute empirical mean from simulated day-ahead series
+        empirical_mean = spots.mean(axis=1)
+
+        # Compute analytical mean
+        analytical_mean = fwd_0.loc[simulation_days]
+
+        # Bootstrap CI (optional)
+        conf = None
+        if bootstrap_ci:
+            # Use a helper similar to _bootstrap_ci if you have it
+            conf = self._bootstrap_ci(
+                pd.DataFrame(day_ahead_values.T, index=simulation_days), np.mean
+            )
+
+        observable_name = "Spot"
+
+        # Plot (optional)
+        if plot:
+            self._plot_results(
+                empirical_mean, analytical_mean, conf, observable_name, max_rel_dev
+            )
+
+        # Relative difference assertion
+        assert_relative_difference(
+            empirical_mean, analytical_mean, max_diff=max_rel_dev, name=observable_name
         )

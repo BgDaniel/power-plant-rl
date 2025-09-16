@@ -70,10 +70,10 @@ class SpreadModel:
 
         # Instantiate underlying two-factor models
         self.two_factor_power_model = TwoFactorForwardModel(
-            params=params_two_factor_power_model
+            as_of_date, simulation_days, params=params_two_factor_power_model
         )
         self.two_factor_coal_model = TwoFactorForwardModel(
-            params=params_two_factors_coal_model
+            as_of_date, simulation_days, params=params_two_factors_coal_model
         )
         self.rho_long = rho_long
 
@@ -84,10 +84,10 @@ class SpreadModel:
         rho_coal = self.two_factor_coal_model.rho
         corr_matrix = np.array(
             [
-                [1.0, rho_power, 0.0, 0.0],
-                [rho_power, 1.0, 0.0, self.rho_long],
-                [0.0, 0.0, 1.0, rho_coal],
-                [0.0, self.rho_long, rho_coal, 1.0],
+                [1.0,       rho_power,      0.0,        0.0],
+                [rho_power, 1.0,            0.0,        self.rho_long],
+                [0.0,       0.0,            1.0,        rho_coal],
+                [0.0,       self.rho_long,  rho_coal,   1.0],
             ]
         )
 
@@ -101,30 +101,30 @@ class SpreadModel:
         coal_fwd_0: pd.Series,
         n_sims: int,
     ) -> tuple[xr.DataArray, xr.DataArray, xr.DataArray, xr.DataArray]:
-        n_steps = len(simulation_days)
-        dW_values = self._generate_dW_values(n_sims, n_steps)
+        n_steps = len(self.simulation_days)
+        dw = self._generate_dW_values(n_sims, n_steps)
 
         # override underlying models' generate_dW_values
-        self.two_factor_power_model.generate_dW_values = lambda n_s, n_t: dW_values[
+        self.two_factor_power_model.generate_dW_values = lambda n_s, n_t: dw[
             :, :, :2
         ]
-        self.two_factor_coal_model.generate_dW_values = lambda n_s, n_t: dW_values[
+        self.two_factor_coal_model.generate_dW_values = lambda n_s, n_t: dw[
             :, :, 2:
         ]
 
         # simulate both models
-        power_fwd, power_month_ahead, power_day_ahead = (
+        power_fwd, power_month_ahead, power_spot = (
             self.two_factor_power_model.simulate(fwd_0=power_fwd_0, n_sims=n_sims)
         )
-        coal_fwd, coal_month_ahead, coal_day_ahead = (
+        coal_fwd, coal_month_ahead, coal_day_spot = (
             self.two_factor_coal_model.simulate(fwd_0=coal_fwd_0, n_sims=n_sims)
         )
 
         return (
             power_fwd,
             power_month_ahead,
-            power_day_ahead,
+            power_spot,
             coal_fwd,
             coal_month_ahead,
-            coal_day_ahead,
+            coal_day_spot,
         )

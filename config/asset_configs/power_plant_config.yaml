@@ -1,0 +1,31 @@
+# -----------------------
+# Cost parameters
+# -----------------------
+costs:
+  # Fixed operational costs of the power plant
+  operation_costs: 2.0
+
+  # Coefficient for operational cost factor
+  alpha: 1.0
+
+  # Costs associated with ramping up the plant
+  ramping_up_costs: 4.0
+
+  # Costs associated with ramping down the plant
+  ramping_down_costs: 3.0
+
+  # Costs incurred when the plant is idle
+  idle_costs: 0.02
+
+# -----------------------
+# Technical constraints
+# -----------------------
+technical_constraints:
+  # Number of days required to ramp up the plant to full capacity
+  n_days_ramping_up: 1
+
+  # Number of days required to ramp down the plant to zero capacity
+  n_days_ramping_down: 1
+
+  # Degree of the polynomial used for regression calculations
+  polynomial_degree: 3

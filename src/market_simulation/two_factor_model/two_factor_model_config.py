@@ -23,7 +23,7 @@ class TwoFactorModelConfig(BaseConfig):
 
     beta : float
         Volatility parameter of the day-ahead OU process.
-    kappa : float
+    sigma : float
         Mean reversion speed of the day-ahead OU process.
     """
 
@@ -34,4 +34,4 @@ class TwoFactorModelConfig(BaseConfig):
     rho: float
 
     beta: float
-    kappa: float
+    sigma: float

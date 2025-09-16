@@ -60,7 +60,7 @@ class TwoFactorForwardModel:
 
         # --- Day-ahead OU params ---
         self.beta = params.beta
-        self.kappa = params.kappa
+        self.sigma = params.sigma
 
         # Cholesky decomposition for correlation
         corr_matrix = np.array([[1.0, self.rho], [self.rho, 1.0]])
@@ -156,7 +156,7 @@ class TwoFactorForwardModel:
             Means of the day-ahead process indexed by sim_dates.
         """
         t = np.array([yfr(self.as_of_date, d) for d in sim_dates])
-        var = (self.beta ** 2 / (2 * self.kappa)) * (1 - np.exp(-2 * self.kappa * t))
+        var = (self.beta**2 / (2 * self.sigma)) * (1 - np.exp(-2 * self.sigma * t))
         means = np.exp(0.5 * var)
         return pd.Series(means, index=sim_dates)
 
@@ -175,7 +175,7 @@ class TwoFactorForwardModel:
             Variances of the day-ahead process indexed by sim_dates.
         """
         t = np.array([yfr(self.as_of_date, d) for d in sim_dates])
-        var = (self.beta ** 2 / (2 * self.kappa)) * (1 - np.exp(-2 * self.kappa * t))
+        var = (self.sigma**2 / (2 * self.beta)) * (1 - np.exp(-2 * self.sigma * t))
         variances = (np.exp(var) - 1) * np.exp(var)
         return pd.Series(variances, index=sim_dates)
 
@@ -198,19 +198,16 @@ class TwoFactorForwardModel:
             Day-ahead simulated series with same shape as month_ahead.
         """
         n_steps = len(self.simulation_days)
-        dt = DT
 
         # OU process in log-space
         x = np.zeros((n_steps, n_sims))
-        dw = np.random.normal(scale=np.sqrt(dt), size=(n_steps - 1, n_sims))
+        dw = np.random.normal(size=(n_steps - 1, n_sims)) * np.sqrt(DT)
 
         for t in range(1, n_steps):
             x[t, :] = (
-                x[t - 1, :] * np.exp(-self.kappa * dt)
-                + self.beta
-                * np.sqrt(1 - np.exp(-2 * self.kappa * dt))
-                / np.sqrt(2 * self.kappa)
-                * dw[t - 1, :]
+                x[t - 1, :]
+                - self.beta * x[t - 1, :] * DT
+                + self.sigma * dw[t - 1, :]
             )
 
         day_ahead = np.exp(x)
