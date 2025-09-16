@@ -51,6 +51,30 @@ class ForwardCurve:
     def __repr__(self) -> str:
         return f"ForwardCurve(name={self.name}, as_of_date={self.as_of_date}, len={len(self.series)})"
 
+    @property
+    def index(self) -> pd.DatetimeIndex:
+        """
+        Get the index of the forward curve series.
+
+        Returns
+        -------
+        pd.DatetimeIndex
+            Dates corresponding to the forward curve values.
+        """
+        return self.series.index
+
+    @property
+    def values(self) -> np.ndarray:
+        """
+        Get the values of the forward curve series.
+
+        Returns
+        -------
+        np.ndarray
+            Forward curve values.
+        """
+        return self.series.values
+
     def plot(self, title: Optional[str] = None) -> None:
         """
         Plot the forward curve with y-axis starting at 0 and upper limit 1.1 times the max value.
