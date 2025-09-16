@@ -69,11 +69,15 @@ class ForwardCurve:
         Get the values of the forward curve series.
 
         Returns
-        -------
         np.ndarray
             Forward curve values.
         """
         return self.series.values
+
+    @property
+    def loc(self):
+        """Return the loc accessor for the underlying series."""
+        return self.series.loc
 
     def plot(self, title: Optional[str] = None) -> None:
         """

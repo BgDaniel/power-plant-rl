@@ -59,9 +59,7 @@ def example_model_and_data() -> (
     # Simulation
     n_sims = 10000
 
-    fwds, month_aheads, spots = two_factor_model.simulate(
-        fwd_0=fwd_0, n_sims=n_sims
-    )
+    fwds, month_aheads, spots = two_factor_model.simulate(fwd_0=fwd_0, n_sims=n_sims)
 
     return two_factor_model, fwd_0, simulation_days, fwds, month_aheads, spots
 
@@ -136,9 +134,11 @@ class TestTwoFactorForwardModel:
         analytical_data: pd.Series,
         conf: Optional[dict[int, dict[str, pd.Series]]],
         title: str,
+        max_rel_dev: float,  # Mandatory relative deviation for corridor
     ) -> None:
         """
-        Plot simulation results against analytical benchmarks with confidence intervals.
+        Plot simulation results against analytical benchmarks with confidence intervals
+        and highlight empirical points outside ±max_rel_dev of analytical data.
 
         Parameters
         ----------
@@ -146,10 +146,12 @@ class TestTwoFactorForwardModel:
             Series of empirical statistics from simulations.
         analytical_data : pd.Series
             Series of analytical statistics for comparison.
-        conf : dict[int, dict[str, pd.Series]]
+        conf : dict[int, dict[str, pd.Series]] or None
             Bootstrap confidence intervals.
         title : str
             Plot title.
+        max_rel_dev : float
+            Maximum allowed relative deviation; used to create green corridor around analytical.
         """
         plt.plot(
             empirical_data.index,
@@ -165,6 +167,30 @@ class TestTwoFactorForwardModel:
             lw=1,
             linestyle="--",
             label="Analytical",
+        )
+
+        # Green corridor for ±max_rel_dev
+        corridor_lower = analytical_data * (1 - max_rel_dev)
+        corridor_upper = analytical_data * (1 + max_rel_dev)
+        plt.fill_between(
+            empirical_data.index,
+            corridor_lower,
+            corridor_upper,
+            color="green",
+            alpha=0.2,
+            label=f"±{max_rel_dev:.0%} corridor",
+        )
+
+        # Highlight points outside corridor with red crosses
+        outside_mask = (empirical_data < corridor_lower) | (
+            empirical_data > corridor_upper
+        )
+        plt.scatter(
+            empirical_data.index[outside_mask],
+            empirical_data[outside_mask],
+            color="red",
+            marker="x",
+            label="Out of bounds",
         )
 
         if conf:
@@ -214,7 +240,7 @@ class TestTwoFactorForwardModel:
         delivery_start: pd.Timestamp,
         example_model_and_data: tuple,
         bootstrap_ci: bool = False,
-        max_diff: float = 0.01,
+        max_rel_dev: float = 0.01,
         plot: bool = True,
     ) -> None:
         """
@@ -266,14 +292,15 @@ class TestTwoFactorForwardModel:
                 mean_emp,
                 mean_exp,
                 conf,
-                title=f"{observable_name} - Delivery {delivery_start.date()}",
+                f"{observable_name} - Delivery {delivery_start.date()}",
+                max_rel_dev,
             )
 
         # Assert similarity
         assert_relative_difference(
             mean_emp,
             mean_exp,
-            max_diff=max_diff,
+            max_diff=max_rel_dev,
             name=f"{observable_name}_{delivery_start.date()}",
         )
 
@@ -283,7 +310,7 @@ class TestTwoFactorForwardModel:
         delivery_start: pd.Timestamp,
         example_model_and_data: tuple,
         bootstrap_ci: bool = False,
-        max_diff: float = 0.05,
+        max_rel_dev: float = 0.05,
         plot: bool = True,
     ) -> None:
         """
@@ -318,7 +345,9 @@ class TestTwoFactorForwardModel:
         var_emp: pd.Series = fwd.var(axis=1, ddof=1)
 
         # Analytical variance from the model
-        var_exp: pd.Series = two_factor_model.var(fwd_0, maturity_date=delivery_start)
+        var_exp: pd.Series = two_factor_model.var(
+            fwd_0.loc[delivery_start], maturity_date=delivery_start
+        )
         var_exp = var_exp.loc[fwd.index]  # align with empirical dates
 
         # Bootstrap confidence intervals (optional)
@@ -333,14 +362,15 @@ class TestTwoFactorForwardModel:
                 var_emp,
                 var_exp,
                 conf,
-                title=f"{observable_name} - Delivery {delivery_start.date()}",
+                f"{observable_name} - Delivery {delivery_start.date()}",
+                max_rel_dev,
             )
 
         # Assert similarity
         assert_relative_difference(
             var_emp,
             var_exp,
-            max_diff=max_diff,
+            max_diff=max_rel_dev,
             name=f"{observable_name}_{delivery_start.date()}",
         )
 
@@ -350,7 +380,7 @@ class TestTwoFactorForwardModel:
         delivery_start: pd.Timestamp,
         example_model_and_data: tuple,
         bootstrap_ci: bool = False,
-        max_diff: float = 0.05,
+        max_rel_dev: float = 0.05,
         plot: bool = True,
     ) -> None:
         """
@@ -398,14 +428,15 @@ class TestTwoFactorForwardModel:
                 instant_fwd_vol_emp,
                 instant_fwd_vol_exp,
                 conf,
-                title=f"{observable_name} - Delivery {delivery_start.date()}",
+                f"{observable_name} - Delivery {delivery_start.date()}",
+                max_rel_dev,
             )
 
         # Assert similarity
         assert_relative_difference(
             instant_fwd_vol_emp,
             instant_fwd_vol_exp,
-            max_diff=max_diff,
+            max_diff=max_rel_dev,
             name=f"{observable_name}_{delivery_start.date()}",
         )
 
@@ -413,7 +444,7 @@ class TestTwoFactorForwardModel:
         self,
         example_model_and_data: tuple,
         bootstrap_ci: bool = False,
-        max_diff: float = 0.05,
+        max_rel_dev: float = 0.05,
         plot: bool = True,
     ):
         """
@@ -434,41 +465,37 @@ class TestTwoFactorForwardModel:
             example_model_and_data
         )
 
-        # Compute empirical mean from simulated day-ahead series
-        day_ahead_values = (
-            (month_aheads / spots).sel(SIMULATION_DAY=simulation_days).values
-        )
-        empirical_mean = pd.Series(day_ahead_values.mean(axis=0), index=simulation_days)
+        empirical_mean = month_aheads.mean(axis=1)
 
         # Compute analytical mean
-        analytical_mean = model.mean_day_ahead(simulation_days)
+        analytical_mean = fwd_0.loc[simulation_days]
 
         # Bootstrap CI (optional)
         conf = None
         if bootstrap_ci:
             # Use a helper similar to _bootstrap_ci if you have it
-            conf = model._bootstrap_ci(
-                pd.DataFrame(day_ahead_values.T, index=simulation_days), np.mean
+            conf = self._bootstrap_ci(
+                pd.DataFrame(month_aheads.T, index=simulation_days), np.mean
             )
 
-        observable_name = "Day-Ahead Mean"
+        observable_name = "Month-Ahead Mean"
 
         # Plot (optional)
         if plot:
             self._plot_results(
-                empirical_mean, analytical_mean, conf, title=observable_name
+                empirical_mean, analytical_mean, conf, observable_name, max_rel_dev
             )
 
         # Relative difference assertion
         assert_relative_difference(
-            empirical_mean, analytical_mean, max_diff=max_diff, name=observable_name
+            empirical_mean, analytical_mean, max_diff=max_rel_dev, name=observable_name
         )
 
     def test_mean_day_ahead(
         self,
         example_model_and_data: tuple,
         bootstrap_ci: bool = False,
-        max_diff: float = 0.05,
+        max_rel_dev: float = 0.05,
         plot: bool = True,
     ):
         """
@@ -490,19 +517,17 @@ class TestTwoFactorForwardModel:
         )
 
         # Compute empirical mean from simulated day-ahead series
-        day_ahead_values = (
-            (month_aheads / spots).sel(SIMULATION_DAY=simulation_days).values
-        )
-        empirical_mean = pd.Series(day_ahead_values.mean(axis=0), index=simulation_days)
+        day_ahead_values = month_aheads / spots
+        empirical_mean = day_ahead_values.mean(axis=1)
 
         # Compute analytical mean
-        analytical_mean = model.mean_day_ahead(simulation_days)
+        analytical_mean = model.day_ahead_mean(simulation_days)
 
         # Bootstrap CI (optional)
         conf = None
         if bootstrap_ci:
             # Use a helper similar to _bootstrap_ci if you have it
-            conf = model._bootstrap_ci(
+            conf = self._bootstrap_ci(
                 pd.DataFrame(day_ahead_values.T, index=simulation_days), np.mean
             )
 
@@ -511,19 +536,19 @@ class TestTwoFactorForwardModel:
         # Plot (optional)
         if plot:
             self._plot_results(
-                empirical_mean, analytical_mean, conf, title=observable_name
+                empirical_mean, analytical_mean, conf, observable_name, max_rel_dev
             )
 
         # Relative difference assertion
         assert_relative_difference(
-            empirical_mean, analytical_mean, max_diff=max_diff, name=observable_name
+            empirical_mean, analytical_mean, max_diff=max_rel_dev, name=observable_name
         )
 
     def test_variance_day_ahead(
         self,
         example_model_and_data: tuple,
         bootstrap_ci: bool = False,
-        max_diff: float = 0.05,
+        max_rel_dev: float = 0.05,
         plot: bool = True,
     ):
         """
@@ -545,23 +570,16 @@ class TestTwoFactorForwardModel:
         )
 
         # Compute empirical variance from simulated day-ahead series
-        day_ahead_values = (
-            (month_aheads / spots).sel(SIMULATION_DAY=simulation_days).values
-        )
-        empirical_var = pd.Series(
-            day_ahead_values.var(axis=0, ddof=1), index=simulation_days
-        )
+        day_ahead_values = month_aheads / spots
+        empirical_var = day_ahead_values.var(axis=1)
 
         # Compute analytical variance
-        month_ahead_mean = month_aheads.sel(SIMULATION_DAY=simulation_days).values.mean(
-            axis=0
-        )
-        analytical_var = model.variance_day_ahead(month_ahead_mean, simulation_days)
+        analytical_var = model.day_ahead_var(simulation_days)
 
         # Bootstrap CI (optional)
         conf = None
         if bootstrap_ci:
-            conf = model._bootstrap_ci(
+            conf = self._bootstrap_ci(
                 pd.DataFrame(day_ahead_values.T, index=simulation_days), np.var
             )
 
@@ -570,13 +588,13 @@ class TestTwoFactorForwardModel:
         # Plot (optional)
         if plot:
             self._plot_results(
-                empirical_var, analytical_var, conf, title=f"{observable_name}"
+                empirical_var, analytical_var, conf, f"{observable_name}", max_rel_dev
             )
 
         # Relative difference assertion
         assert_relative_difference(
             empirical_var,
             analytical_var,
-            max_diff=max_diff,
+            max_diff=max_rel_dev,
             name=observable_name,
         )

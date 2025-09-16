@@ -160,14 +160,12 @@ class TwoFactorForwardModel:
         means = np.exp(0.5 * var)
         return pd.Series(means, index=sim_dates)
 
-    def variance_day_ahead(self, month_ahead: float, sim_dates: pd.DatetimeIndex) -> pd.Series:
+    def day_ahead_var(self, sim_dates: pd.DatetimeIndex) -> pd.Series:
         """
         Compute the variance of the exponential OU day-ahead process for multiple simulation dates.
 
         Parameters
         ----------
-        month_ahead : float
-            Month-ahead forward value for all simulation dates.
         sim_dates : pd.DatetimeIndex
             The simulation dates for which the variance is calculated.
 
@@ -178,7 +176,7 @@ class TwoFactorForwardModel:
         """
         t = np.array([yfr(self.as_of_date, d) for d in sim_dates])
         var = (self.beta ** 2 / (2 * self.kappa)) * (1 - np.exp(-2 * self.kappa * t))
-        variances = (month_ahead ** 2) * (np.exp(var) - 1) * np.exp(var)
+        variances = (np.exp(var) - 1) * np.exp(var)
         return pd.Series(variances, index=sim_dates)
 
     def _simulate_spot_prices(
