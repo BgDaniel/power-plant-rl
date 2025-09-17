@@ -141,28 +141,28 @@ class TwoFactorForwardModel:
         log_vars = self.log_var(maturity_date)
         return fwd_0**2 * (np.exp(log_vars) - 1)
 
-    def day_ahead_mean(self, sim_dates: pd.DatetimeIndex) -> pd.Series:
+    def var_ou(self, sim_dates: pd.DatetimeIndex) -> pd.Series:
         """
-        Compute the mean of the exponential OU day-ahead process for multiple simulation dates.
+        Compute the variance of the OU day-ahead process for multiple simulation dates.
 
         Parameters
         ----------
         sim_dates : pd.DatetimeIndex
-            The simulation dates for which the mean is calculated.
+            The simulation dates for which the variance is calculated.
 
         Returns
         -------
         pd.Series
-            Means of the day-ahead process indexed by sim_dates.
+            Variances of the OU process indexed by sim_dates.
         """
         t = np.array([yfr(self.as_of_date, d) for d in sim_dates])
-        var = (self.beta**2 / (2 * self.sigma)) * (1 - np.exp(-2 * self.sigma * t))
-        means = np.exp(0.5 * var)
-        return pd.Series(means, index=sim_dates)
+        var = (self.sigma ** 2 / (2 * self.beta)) * (1 - np.exp(-2 * self.beta * t))
+        return pd.Series(var, index=sim_dates)
 
     def day_ahead_var(self, sim_dates: pd.DatetimeIndex) -> pd.Series:
         """
         Compute the variance of the exponential OU day-ahead process for multiple simulation dates.
+        Note that the day ahead process is assumed to be driftless.
 
         Parameters
         ----------
@@ -174,9 +174,8 @@ class TwoFactorForwardModel:
         pd.Series
             Variances of the day-ahead process indexed by sim_dates.
         """
-        t = np.array([yfr(self.as_of_date, d) for d in sim_dates])
-        var = (self.sigma**2 / (2 * self.beta)) * (1 - np.exp(-2 * self.sigma * t))
-        variances = (np.exp(var) - 1) * np.exp(var)
+        ou_var = self.var_ou(sim_dates)
+        variances = np.exp(ou_var) - 1
         return pd.Series(variances, index=sim_dates)
 
     def _simulate_spot_prices(
@@ -210,7 +209,10 @@ class TwoFactorForwardModel:
                 + self.sigma * dw[t - 1, :]
             )
 
-        day_ahead = np.exp(x)
+        var_ou = self.var_ou(self.simulation_days)
+        var_ou_array = var_ou.loc[self.simulation_days].values[:, np.newaxis]
+
+        day_ahead = np.exp(- var_ou_array / 2 + x)
         spot_price_vals = month_ahead.values * day_ahead
 
         return pd.DataFrame(index=month_ahead.index, data=spot_price_vals)
