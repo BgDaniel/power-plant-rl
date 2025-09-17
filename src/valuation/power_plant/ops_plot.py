@@ -44,7 +44,7 @@ class OpsPlot:
           dimensions ('simulation_day', 'operational_state').
         - Handles the edge case of a single operational state.
         """
-        simulation_days: List[np.datetime64] = list(self.power_plant.simulation_days)
+        asset_days: List[np.datetime64] = list(self.power_plant.asset_days[1:])
         states: List[str] = self.power_plant.operational_states
         n_states: int = len(states)
 
@@ -56,10 +56,10 @@ class OpsPlot:
 
         for i, state in enumerate(states):
             r2_values = self.power_plant.r2_scores.sel(
-                simulation_day=self.power_plant.simulation_days[1:],
+                simulation_day=asset_days,
                 operational_state=state,
             ).values
-            axes[i].plot(simulation_days, r2_values, linestyle="-", color="blue")
+            axes[i].plot(asset_days, r2_values, linestyle="-", color="blue")
             axes[i].set_title(f"R² over time - {state}")
             axes[i].set_ylabel("R²")
             axes[i].grid(True)

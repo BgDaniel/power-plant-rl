@@ -49,7 +49,7 @@ class PowerPlant:
     ----------
     n_sims : int
         Number of Monte Carlo simulation paths.
-    simulation_days : pd.DatetimeIndex
+    asset_days : pd.DatetimeIndex
         The timeline of the simulation (one entry per day).
     n_steps : int
         Number of time steps in the simulation (= len(simulation_days)).
@@ -110,7 +110,7 @@ class PowerPlant:
 
         # Simulation setup
         self.n_sims: int = n_sims
-        self.simulation_days: pd.DatetimeIndex = asset_days
+        self.asset_days: pd.DatetimeIndex = asset_days
         self.n_steps: int = len(asset_days)
 
         # Market data
@@ -142,7 +142,7 @@ class PowerPlant:
             np.zeros((self.n_steps, self.n_sims, len(self.operational_states))),
             dims=[DIM_SIMULATION_DAY, DIM_SIMULATION_PATH, DIM_OPERATIONAL_STATE],
             coords={
-                DIM_SIMULATION_DAY: self.simulation_days,
+                DIM_SIMULATION_DAY: self.asset_days,
                 DIM_SIMULATION_PATH: range(self.n_sims),
                 DIM_OPERATIONAL_STATE: self.operational_states,
             },
@@ -156,7 +156,7 @@ class PowerPlant:
             np.zeros((self.n_steps, self.n_sims, len(self.operational_states))),
             dims=[DIM_SIMULATION_DAY, DIM_SIMULATION_PATH, DIM_OPERATIONAL_STATE],
             coords={
-                DIM_SIMULATION_DAY: self.simulation_days,
+                DIM_SIMULATION_DAY: self.asset_days,
                 DIM_SIMULATION_PATH: range(self.n_sims),
                 DIM_OPERATIONAL_STATE: self.operational_states,
             },
@@ -173,7 +173,7 @@ class PowerPlant:
             ),
             dims=[DIM_SIMULATION_DAY, DIM_SIMULATION_PATH, DIM_OPERATIONAL_STATE],
             coords={
-                DIM_SIMULATION_DAY: self.simulation_days[
+                DIM_SIMULATION_DAY: self.asset_days[
                     :-1
                 ],  # no decision on last day
                 DIM_SIMULATION_PATH: range(self.n_sims),
@@ -186,7 +186,7 @@ class PowerPlant:
             np.zeros((self.n_steps, self.n_sims, len(self.operational_states))),
             dims=[DIM_SIMULATION_DAY, DIM_SIMULATION_PATH, DIM_OPERATIONAL_STATE],
             coords={
-                DIM_SIMULATION_DAY: self.simulation_days,
+                DIM_SIMULATION_DAY: self.asset_days,
                 DIM_SIMULATION_PATH: range(self.n_sims),
                 DIM_OPERATIONAL_STATE: self.operational_states,
             },
@@ -197,7 +197,7 @@ class PowerPlant:
             np.zeros((self.n_steps, len(self.operational_states))),
             dims=[DIM_SIMULATION_DAY, DIM_OPERATIONAL_STATE],
             coords={
-                DIM_SIMULATION_DAY: self.simulation_days,
+                DIM_SIMULATION_DAY: self.asset_days,
                 DIM_OPERATIONAL_STATE: self.operational_states,
             },
             name=REGRESSION_RESULTS,
@@ -211,7 +211,7 @@ class PowerPlant:
         Initialize terminal state (end of simulation).
         Sets cashflows and values for the last day across all operational states.
         """
-        last_day = self.simulation_days[-1]
+        last_day = self.asset_days[-1]
         spread_last = self.spread.loc[last_day]
 
         self.cashflows.loc[
@@ -253,11 +253,11 @@ class PowerPlant:
         simulation_day : pd.Timestamp
             The simulation day to optimize.
         """
-        first_day = self.simulation_days[0]
+        first_day = self.asset_days[0]
 
         if simulation_day == first_day:
             # Special case: first day, no regression
-            next_day = self.simulation_days[1]
+            next_day = self.asset_days[1]
             for state in OperationalState:
                 mean_value = (
                     self.values.sel(simulation_day=next_day, operational_state=state)
@@ -555,22 +555,22 @@ class PowerPlant:
         # Convert to pandas DataFrames
         optimal_value = pd.DataFrame(
             value_arr,
-            index=self.simulation_days,
+            index=self.asset_days,
             columns=[f"path_{i}" for i in range(n_sims)],
         )
         optimal_state = pd.DataFrame(
             state_arr,
-            index=self.simulation_days,
+            index=self.asset_days,
             columns=[f"path_{i}" for i in range(n_sims)],
         )
         optimal_control = pd.DataFrame(
             control_arr,
-            index=self.simulation_days[:-1],
+            index=self.asset_days[:-1],
             columns=[f"path_{i}" for i in range(n_sims)],
         )
         optimal_cashflow = pd.DataFrame(
             cashflow_arr,
-            index=self.simulation_days,
+            index=self.asset_days,
             columns=[f"path_{i}" for i in range(n_sims)],
         )
 
@@ -605,8 +605,8 @@ class PowerPlant:
         self._initialize_terminal_state()
 
         for simulation_day in tqdm(
-            reversed(self.simulation_days[:-1]),
-            total=len(self.simulation_days) - 1,
+            reversed(self.asset_days[:-1]),
+            total=len(self.asset_days) - 1,
             desc="Optimizing simulation days",
             unit="day",
         ):
