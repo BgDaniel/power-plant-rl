@@ -5,9 +5,8 @@ import pandas as pd
 import logging
 from tqdm import tqdm
 import time
+from typing import Tuple
 
-from forward_curve.forward_curve import ForwardCurve
-from market_simulation.spread_model.spread_model import SpreadModel
 from valuation.operations_states import OperationalState
 from valuation.operational_control import OptimalControl
 
@@ -64,7 +63,7 @@ class PowerPlant:
     optimal_control_decision : xr.DataArray
         Optimal control decision for each (day, simulation path, operational state).
         Shape: (n_steps - 1, n_sims, 4).
-    states : list[str]
+    operational_states : list[str]
         List of operational states as lowercase strings, aligned with `OperationalState`.
     """
 
@@ -134,18 +133,18 @@ class PowerPlant:
         self.polynomial_degree = polynomial_degree
 
         # Operational states (string labels, consistent with enum)
-        self.states: list[OperationalState] = list(OperationalState)
+        self.operational_states: list[OperationalState] = list(OperationalState)
 
         # -----------------------
         # Cashflows
         # -----------------------
         self.cashflows: xr.DataArray = xr.DataArray(
-            np.zeros((self.n_steps, self.n_sims, len(self.states))),
+            np.zeros((self.n_steps, self.n_sims, len(self.operational_states))),
             dims=[DIM_SIMULATION_DAY, DIM_SIMULATION_PATH, DIM_OPERATIONAL_STATE],
             coords={
                 DIM_SIMULATION_DAY: self.simulation_days,
                 DIM_SIMULATION_PATH: range(self.n_sims),
-                DIM_OPERATIONAL_STATE: self.states,
+                DIM_OPERATIONAL_STATE: self.operational_states,
             },
             name=CASHFLOWS,
         )
@@ -153,13 +152,13 @@ class PowerPlant:
         # -----------------------
         # Values
         # -----------------------
-        self.value: xr.DataArray = xr.DataArray(
-            np.zeros((self.n_steps, self.n_sims, len(self.states))),
+        self.values: xr.DataArray = xr.DataArray(
+            np.zeros((self.n_steps, self.n_sims, len(self.operational_states))),
             dims=[DIM_SIMULATION_DAY, DIM_SIMULATION_PATH, DIM_OPERATIONAL_STATE],
             coords={
                 DIM_SIMULATION_DAY: self.simulation_days,
                 DIM_SIMULATION_PATH: range(self.n_sims),
-                DIM_OPERATIONAL_STATE: self.states,
+                DIM_OPERATIONAL_STATE: self.operational_states,
             },
             name=VALUE,
         )
@@ -169,7 +168,7 @@ class PowerPlant:
         # -----------------------
         self.optimal_control: xr.DataArray = xr.DataArray(
             np.full(
-                (self.n_steps - 1, self.n_sims, len(self.states)),
+                (self.n_steps - 1, self.n_sims, len(self.operational_states)),
                 OptimalControl.DO_NOTHING,
             ),
             dims=[DIM_SIMULATION_DAY, DIM_SIMULATION_PATH, DIM_OPERATIONAL_STATE],
@@ -178,29 +177,28 @@ class PowerPlant:
                     :-1
                 ],  # no decision on last day
                 DIM_SIMULATION_PATH: range(self.n_sims),
-                DIM_OPERATIONAL_STATE: self.states,
+                DIM_OPERATIONAL_STATE: self.operational_states,
             },
             name=OPTIMAL_CONTROL,
         )
 
-        self.regressed_value: xr.DataArray = xr.DataArray(
-            np.zeros((self.n_steps, self.n_sims, len(self.states))),
+        self.regressed_values: xr.DataArray = xr.DataArray(
+            np.zeros((self.n_steps, self.n_sims, len(self.operational_states))),
             dims=[DIM_SIMULATION_DAY, DIM_SIMULATION_PATH, DIM_OPERATIONAL_STATE],
             coords={
                 DIM_SIMULATION_DAY: self.simulation_days,
                 DIM_SIMULATION_PATH: range(self.n_sims),
-                DIM_OPERATIONAL_STATE: self.states,
+                DIM_OPERATIONAL_STATE: self.operational_states,
             },
             name=REGRESSED_VALUE,
         )
 
-        self.regression_results: xr.DataArray = xr.DataArray(
-            np.zeros((self.n_steps, self.n_sims, len(self.states))),
-            dims=[DIM_SIMULATION_DAY, DIM_SIMULATION_PATH, DIM_OPERATIONAL_STATE],
+        self.r2_scores: xr.DataArray = xr.DataArray(
+            np.zeros((self.n_steps, len(self.operational_states))),
+            dims=[DIM_SIMULATION_DAY, DIM_OPERATIONAL_STATE],
             coords={
                 DIM_SIMULATION_DAY: self.simulation_days,
-                DIM_SIMULATION_PATH: range(self.n_sims),
-                DIM_OPERATIONAL_STATE: self.states,
+                DIM_OPERATIONAL_STATE: self.operational_states,
             },
             name=REGRESSION_RESULTS,
         )
@@ -240,7 +238,7 @@ class PowerPlant:
             -self.operation_costs + self.efficiency * spread_last.values
         )
 
-        self.value.loc[{DIM_SIMULATION_DAY: last_day}] = self.cashflows.loc[
+        self.values.loc[{DIM_SIMULATION_DAY: last_day}] = self.cashflows.loc[
             {DIM_SIMULATION_DAY: last_day}
         ]
 
@@ -262,18 +260,18 @@ class PowerPlant:
             next_day = self.simulation_days[1]
             for state in OperationalState:
                 mean_value = (
-                    self.value.sel(simulation_day=next_day, operational_state=state)
+                    self.values.sel(simulation_day=next_day, operational_state=state)
                     .mean(dim="simulation_path")
                     .values
                 )
                 # Broadcast the mean to all simulation paths
-                self.regressed_value.loc[
+                self.regressed_values.loc[
                     dict(simulation_day=simulation_day, operational_state=state)
                 ] = np.full(self.n_sims, mean_value)
         else:
             # Normal case: regress for all states
             for state in OperationalState:
-                self.regressed_value.loc[
+                self.regressed_values.loc[
                     dict(simulation_day=simulation_day, operational_state=state)
                 ] = self._regress(simulation_day, state)
 
@@ -295,17 +293,17 @@ class PowerPlant:
         idle = OperationalState.IDLE
         ramp_up = OperationalState.RAMPING_UP
 
-        cont_val = self.regressed_value.loc[
+        cont_val = self.regressed_values.loc[
             dict(simulation_day=simulation_day, operational_state=idle)
         ]
-        exer_val = self.regressed_value.loc[
+        exer_val = self.regressed_values.loc[
             dict(simulation_day=simulation_day, operational_state=ramp_up)
         ]
 
         self.cashflows.loc[
             dict(simulation_day=simulation_day, operational_state=idle)
         ] = -self.idle_costs
-        self.value.loc[dict(simulation_day=simulation_day, operational_state=idle)] = (
+        self.values.loc[dict(simulation_day=simulation_day, operational_state=idle)] = (
             -self.idle_costs + np.maximum(cont_val, exer_val)
         )
         self.optimal_control.loc[
@@ -329,11 +327,11 @@ class PowerPlant:
         self.cashflows.loc[
             dict(simulation_day=simulation_day, operational_state=ramp_up)
         ] = -self.ramping_up_costs
-        self.value.loc[
+        self.values.loc[
             dict(simulation_day=simulation_day, operational_state=ramp_up)
         ] = (
             -self.ramping_up_costs
-            + self.regressed_value.loc[
+            + self.regressed_values.loc[
                 dict(simulation_day=simulation_day, operational_state=running)
             ]
         )
@@ -354,11 +352,11 @@ class PowerPlant:
         self.cashflows.loc[
             dict(simulation_day=simulation_day, operational_state=ramp_down)
         ] = -self.ramping_down_costs
-        self.value.loc[
+        self.values.loc[
             dict(simulation_day=simulation_day, operational_state=ramp_down)
         ] = (
             -self.ramping_down_costs
-            + self.regressed_value.loc[
+            + self.regressed_values.loc[
                 dict(simulation_day=simulation_day, operational_state=idle)
             ]
         )
@@ -376,17 +374,17 @@ class PowerPlant:
         running = OperationalState.RUNNING
         ramp_down = OperationalState.RAMPING_DOWN
 
-        cont_val = self.regressed_value.loc[
+        cont_val = self.regressed_values.loc[
             dict(simulation_day=simulation_day, operational_state=running)
         ]
-        exer_val = self.regressed_value.loc[
+        exer_val = self.regressed_values.loc[
             dict(simulation_day=simulation_day, operational_state=ramp_down)
         ]
 
         self.cashflows.loc[
             dict(simulation_day=simulation_day, operational_state=running)
         ] = (-self.operation_costs + self.efficiency * self.spread.loc[simulation_day])
-        self.value.loc[
+        self.values.loc[
             dict(simulation_day=simulation_day, operational_state=running)
         ] = (
             -self.operation_costs
@@ -403,7 +401,7 @@ class PowerPlant:
         self,
         simulation_day: pd.Timestamp,
         state: OperationalState,
-        r2_threshold: float = 0.9,
+        r2_threshold: float = 0.0,
     ) -> np.ndarray:
         """
         Regress the optimal value for a given day and operational state
@@ -438,7 +436,7 @@ class PowerPlant:
 
         # Extract target values: optimal value for the next day
         y = (
-            self.value.sel(simulation_day=simulation_day + pd.Timedelta(days=1))
+            self.values.sel(simulation_day=simulation_day + pd.Timedelta(days=1))
             .sel(operational_state=state)
             .values
         )
@@ -470,33 +468,113 @@ class PowerPlant:
             )
 
         # Store regression results in the class xarray field
-        self.regression_results.loc[
+        self.regressed_values.loc[
             dict(simulation_day=simulation_day, operational_state=state)
         ] = regressed_value
 
+        # Store regression results in the class xarray field
+        self.r2_scores.loc[
+            dict(simulation_day=simulation_day, operational_state=state)
+        ] = r2_score
+
         return regressed_value
 
-    def _update_r2_statistics(self, simulation_day: pd.Timestamp) -> None:
+    def determine_optimal_dispatch(
+        self, initial_state: OperationalState
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
-        Update the minimal and maximal R² statistics for the given simulation day.
+        Determine optimal dispatch along all simulation paths.
+
+        Computes DataFrames for optimal value, operational state, control, and cashflow
+        along all simulation paths, starting from the given initial state.
 
         Parameters
         ----------
-        simulation_day : pd.Timestamp
-            The simulation day for which to check R² values.
-        """
-        for state in OperationalState:
-            r2_value = self.regression_results.sel(
-                simulation_day=simulation_day, operational_state=state
-            ).attrs.get("r2", None)
+        initial_state : OperationalState
+            Initial operational state for the first simulation day.
 
-            if r2_value is not None:
-                if r2_value < self._min_r2:
-                    self._min_r2 = r2_value
-                    self._min_r2_day = (simulation_day, state)
-                if r2_value > self._max_r2:
-                    self._max_r2 = r2_value
-                    self._max_r2_day = (simulation_day, state)
+        Returns
+        -------
+        Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]
+            - optimal_value: Optimal value along all paths (rows=days, columns=paths)
+            - optimal_state: Optimal operational state along all paths
+            - optimal_control: Optimal control along all paths
+            - optimal_cashflow: Cashflows along all paths
+        """
+        n_days = self.n_steps
+        n_sims = self.n_sims
+
+        # Initialize arrays
+        value_arr = np.zeros((n_days, n_sims))
+        cashflow_arr = np.zeros((n_days, n_sims))
+        state_arr = np.full((n_days, n_sims), initial_state, dtype=object)
+        control_arr = np.full(
+            (n_days - 1, n_sims), OptimalControl.DO_NOTHING, dtype=object
+        )
+
+        # First day
+        for path in range(n_sims):
+            value_arr[0, path] = self.values.isel(
+                simulation_day=0,
+                simulation_path=path,
+                operational_state=initial_state.value,
+            ).values
+            cashflow_arr[0, path] = self.cashflows.isel(
+                simulation_day=0,
+                simulation_path=path,
+                operational_state=initial_state.value,
+            ).values
+
+        # Iterate over remaining days
+        for i_day in range(1, n_days):
+            for path in range(n_sims):
+                current_state = state_arr[i_day - 1, path]
+                optimal_control_val = self.optimal_control.isel(
+                    simulation_day=i_day - 1,
+                    simulation_path=path,
+                    operational_state=current_state.value,
+                ).values
+                control_arr[i_day - 1, path] = optimal_control_val
+
+                # Determine next state
+                next_state = self.get_next_state(current_state, optimal_control_val)
+                state_arr[i_day, path] = next_state
+
+                # Fill value and cashflow arrays
+                value_arr[i_day, path] = self.values.isel(
+                    simulation_day=i_day,
+                    simulation_path=path,
+                    operational_state=next_state.value,
+                ).values
+                cashflow_arr[i_day, path] = self.cashflows.isel(
+                    simulation_day=i_day,
+                    simulation_path=path,
+                    operational_state=next_state.value,
+                ).values
+
+        # Convert to pandas DataFrames
+        optimal_value = pd.DataFrame(
+            value_arr,
+            index=self.simulation_days,
+            columns=[f"path_{i}" for i in range(n_sims)],
+        )
+        optimal_state = pd.DataFrame(
+            state_arr,
+            index=self.simulation_days,
+            columns=[f"path_{i}" for i in range(n_sims)],
+        )
+        optimal_control = pd.DataFrame(
+            control_arr,
+            index=self.simulation_days[:-1],
+            columns=[f"path_{i}" for i in range(n_sims)],
+        )
+        optimal_cashflow = pd.DataFrame(
+            cashflow_arr,
+            index=self.simulation_days,
+            columns=[f"path_{i}" for i in range(n_sims)],
+        )
+
+        return optimal_value, optimal_state, optimal_control, optimal_cashflow
 
     def optimize(self) -> None:
         """
@@ -516,7 +594,7 @@ class PowerPlant:
         --------
         self.cashflows : xr.DataArray
             Updated cashflows for each day, simulation path, and operational state.
-        self.value : xr.DataArray
+        self.values : xr.DataArray
             Updated values for each day, simulation path, and operational state.
         self.optimal_control : xr.DataArray
             Updated optimal control decisions for each day, path, and state.
@@ -539,64 +617,3 @@ class PowerPlant:
             "Power plant optimization successfully finished. "
             f"Elapsed time: {elapsed_time:.2f} seconds."
         )
-
-
-# Example usage of the PowerPlant class:
-if __name__ == "__main__":
-    config_path_spread_model = "model_configs/spread_model.json"
-
-    as_of_date = pd.Timestamp("2025-09-13")
-    n_days = 365
-
-    simulation_start = as_of_date
-    simulation_end = simulation_start + pd.Timedelta(days=365 + 31)
-
-    simulation_days = pd.date_range(
-        start=simulation_start, end=simulation_end, freq="D"
-    )
-
-    spread_model = SpreadModel(
-        as_of_date, simulation_days, config_path=config_path_spread_model
-    )
-
-    n_sims = 5000
-
-    power_fwd_0 = ForwardCurve.generate_curve(
-        as_of_date=as_of_date,
-        start_date=simulation_start,
-        end_date=simulation_end,
-        start_value=80.0,
-        end_value=110.0,
-        name="Power Forward Curve",
-    )
-
-    coal_fwd_0 = ForwardCurve.generate_curve(
-        as_of_date=as_of_date,
-        start_date=simulation_start,
-        end_date=simulation_end,
-        start_value=60.0,
-        end_value=85.0,
-        name="Coal Forward Curve",
-    )
-
-    power_fwd, _, power_day_ahead, coal_fwd, _, coal_day_ahead = spread_model.simulate(
-        power_fwd_0=power_fwd_0, coal_fwd_0=coal_fwd_0, n_sims=n_sims
-    )
-
-    asset_start = simulation_start
-    asset_end = simulation_start + pd.Timedelta(days=365)
-
-    asset_days = pd.date_range(start=asset_start, end=asset_end, freq="D")
-
-    power_plant = PowerPlant(
-        n_sims=n_sims,
-        asset_days=asset_days,
-        fwds_power=power_fwd,
-        fwds_coal=coal_fwd,
-        spots_power=power_day_ahead,
-        spots_coal=coal_day_ahead,
-        config_path="asset_configs/power_plant_config.yaml",
-    )
-
-    # Run the simulation
-    power_plant.optimize()
