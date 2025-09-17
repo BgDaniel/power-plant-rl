@@ -18,7 +18,7 @@ class PowerPlantConfig:
     ----------
     operation_costs : float
         Fixed operational costs of the power plant.
-    alpha : float
+    efficiency : float
         Coefficient for operational cost factor.
     ramping_up_costs : float
         Costs associated with ramping up operations.
@@ -36,7 +36,7 @@ class PowerPlantConfig:
 
     # Costs
     operation_costs: float
-    alpha: float
+    efficiency: float
     ramping_up_costs: float
     ramping_down_costs: float
     idle_costs: float
@@ -44,7 +44,7 @@ class PowerPlantConfig:
     # Technical constraints
     n_days_ramping_up: int
     n_days_ramping_down: int
-    polynomial_degree: int = 3
+    efficiency: float
 
 
 class PowerPlantConfigLoader:
@@ -54,14 +54,13 @@ class PowerPlantConfigLoader:
     Expects YAML structure:
     costs:
       operation_costs: ...
-      alpha: ...
       ramping_up_costs: ...
       ramping_down_costs: ...
       idle_costs: ...
     technical_constraints:
       n_days_ramping_up: ...
       n_days_ramping_down: ...
-      polynomial_degree: ...
+      efficiency: ...
     """
 
     @staticmethod
@@ -93,11 +92,10 @@ class PowerPlantConfigLoader:
 
         return PowerPlantConfig(
             operation_costs=costs.get("operation_costs", 0.0),
-            alpha=costs.get("alpha", 1.0),
             ramping_up_costs=costs.get("ramping_up_costs", 0.0),
             ramping_down_costs=costs.get("ramping_down_costs", 0.0),
             idle_costs=costs.get("idle_costs", 0.0),
             n_days_ramping_up=tech.get("n_days_ramping_up", 1),
             n_days_ramping_down=tech.get("n_days_ramping_down", 1),
-            polynomial_degree=tech.get("polynomial_degree", 3),
+            efficiency=costs.get("efficiency", 1.0),
         )
