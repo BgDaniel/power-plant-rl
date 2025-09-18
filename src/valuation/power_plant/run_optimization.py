@@ -2,6 +2,7 @@ import pandas as pd
 
 from forward_curve.forward_curve import ForwardCurve
 from market_simulation.spread_model.spread_model import SpreadModel
+from valuation.operations_states import OperationalState
 from valuation.power_plant.ops_plot import OpsPlot
 from valuation.power_plant.power_plant import PowerPlant
 
@@ -19,7 +20,7 @@ spread_model = SpreadModel(
     as_of_date, simulation_days, config_path=config_path_spread_model
 )
 
-n_sims = 10000
+n_sims = 1000
 
 power_fwd_0 = ForwardCurve.generate_curve(
     as_of_date=as_of_date,
@@ -39,8 +40,8 @@ coal_fwd_0 = ForwardCurve.generate_curve(
     name="Coal Forward Curve",
 )
 
-power_fwd, _, power_day_ahead, coal_fwd, _, coal_day_ahead = spread_model.simulate(
-    power_fwd_0=power_fwd_0, coal_fwd_0=coal_fwd_0, n_sims=n_sims
+_, _, power_day_ahead, _, _, coal_day_ahead = spread_model.simulate(
+    power_fwd_0=power_fwd_0, coal_fwd_0=coal_fwd_0, n_sims=n_sims, use_cache=True
 )
 
 asset_start = simulation_start
@@ -48,13 +49,16 @@ asset_end = simulation_start + pd.Timedelta(days=365)
 
 asset_days = pd.date_range(start=asset_start, end=asset_end, freq="D")
 
+initial_state = OperationalState.IDLE
+
 power_plant = PowerPlant(
     n_sims=n_sims,
     asset_days=asset_days,
-    fwds_power=power_fwd,
-    fwds_coal=coal_fwd,
+    initial_state=initial_state ,
     spots_power=power_day_ahead,
     spots_coal=coal_day_ahead,
+    fwd_0_power=power_fwd_0,
+    fwd_0_coal=coal_fwd_0,
     config_path="asset_configs/power_plant_config.yaml",
 )
 
@@ -63,3 +67,5 @@ power_plant.optimize()
 
 ops_plot = OpsPlot(power_plant)
 ops_plot.plot_r2()
+
+ops_plot.plot_operation_along_path(path_index=0)

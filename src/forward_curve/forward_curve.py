@@ -1,7 +1,8 @@
 from __future__ import annotations
-from typing import Optional, Literal
+from typing import Optional
 import pandas as pd
 import numpy as np
+from typing import Any, Dict
 import matplotlib.pyplot as plt
 
 
@@ -50,6 +51,34 @@ class ForwardCurve:
 
     def __repr__(self) -> str:
         return f"ForwardCurve(name={self.name}, as_of_date={self.as_of_date}, len={len(self.series)})"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Serialize key attributes of the object to a dictionary.
+
+        Only includes:
+        - `as_of_date` as string
+        - `name` as string
+        - `series` as a dict with 'index' and 'values'
+
+        Returns
+        -------
+        Dict[str, Any]
+            Dictionary containing a serializable representation of the object.
+        """
+        result: Dict[str, Any] = {
+            "as_of_date": str(getattr(self, "as_of_date", None)),
+            "name": getattr(self, "name", None),
+        }
+
+        series: pd.Series = getattr(self, "series", None)
+        if series is not None:
+            result["series"] = {
+                "index": [str(d) for d in series.index],
+                "values": series.values.tolist()
+            }
+
+        return result
 
     @property
     def index(self) -> pd.DatetimeIndex:

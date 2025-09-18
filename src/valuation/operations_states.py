@@ -1,6 +1,7 @@
 from enum import Enum
-
-from valuation.operational_control import OptimalControl
+import numpy as np
+import pandas as pd
+import xarray as xr
 
 
 class OperationalState(Enum):
@@ -10,35 +11,51 @@ class OperationalState(Enum):
     RAMPING_UP = 1  # The plant is ramping up to generate power.
     RAMPING_DOWN = 2  # The plant is ramping down from power generation.
     RUNNING = 3  # The plant is actively generating power.
+    UNDEFINED = 99  # Special marker for invalid transitions
 
+
+# Transition matrix: rows = current state, columns = control
+# Values = next state
+NEXT_STATE_MATRIX = np.array([
+    # DO_NOTHING, RAMPING_UP, RAMPING_DOWN
+    [OperationalState.IDLE, OperationalState.RAMPING_UP, OperationalState.UNDEFINED],       # IDLE
+    [OperationalState.RUNNING, OperationalState.UNDEFINED, OperationalState.UNDEFINED],     # RAMPING_UP
+    [OperationalState.IDLE, OperationalState.UNDEFINED, OperationalState.UNDEFINED],  # RAMPING_DOWN
+    [OperationalState.RUNNING, OperationalState.UNDEFINED, OperationalState.RAMPING_DOWN],  # RUNNING
+])
 
 def get_next_state(
-    current_optimal_state: OperationalState, optimal_control: OptimalControl
-) -> OperationalState:
+    prev_states: pd.Series,
+    prev_controls: xr.DataArray
+) -> np.ndarray:
     """
-    Get the next operational state based on the current state and optimal control decision.
+    Vectorized computation of next operational states.
 
-    Args:
-        current_optimal_state (OperationalState): The current state of the power plant.
-        optimal_control (OptimalControl): The optimal control decision for the next step.
+    Parameters
+    ----------
+    prev_states : pd.Series[OperationalState]
+        Current operational states as enums. Indexed by simulation path.
+    prev_controls : xr.DataArray
+        Optimal control decisions as enums. One-dimensional, length n_paths.
 
-    Returns:
-        OperationalState: The next operational state after applying the optimal control decision.
+    Returns
+    -------
+    np.ndarray
+        Next operational states as integers. Shape: (n_paths,)
     """
-    if current_optimal_state == OperationalState.IDLE:
-        if optimal_control == OptimalControl.RAMPING_UP:
-            return OperationalState.RAMPING_UP
-        else:
-            return OperationalState.IDLE  # Do Nothing remains in IDLE
+    # Convert prev_states (Series of enums) to integers
+    prev_states_int = prev_states.map(lambda s: s.value).to_numpy(dtype=int)
 
-    elif current_optimal_state == OperationalState.RAMPING_UP:
-        return OperationalState.RUNNING
+    # Convert prev_controls (DataArray of enums) to integers
+    prev_controls_int = np.array([ctrl.value for ctrl in prev_controls.values], dtype=int)
 
-    elif current_optimal_state == OperationalState.RUNNING:
-        if optimal_control == OptimalControl.RAMPING_DOWN:
-            return OperationalState.RAMPING_DOWN
-        else:  # DO_NOTHING
-            return OperationalState.RUNNING  # Stay running
+    next_states = NEXT_STATE_MATRIX[prev_states_int, prev_controls_int]
 
-    elif current_optimal_state == OperationalState.RAMPING_DOWN:
-        return OperationalState.IDLE
+    # Check for invalid transitions
+    if np.any(next_states == OperationalState.UNDEFINED):
+        invalid_indices = np.where(next_states == OperationalState.UNDEFINED)[0]
+        raise ValueError(
+            f"Invalid state transition requested for paths: {invalid_indices}"
+        )
+
+    return next_states

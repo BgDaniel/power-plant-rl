@@ -78,6 +78,22 @@ class SpreadModel:
         self.rho_long = rho_long
 
     def _generate_dW_values(self, n_sims: int, n_steps: int) -> np.ndarray:
+        """
+        Generate correlated standard normal shocks for joint power and coal simulations.
+
+        Parameters
+        ----------
+        n_sims : int
+            Number of simulation paths.
+        n_steps : int
+            Number of simulation steps (typically number of days).
+
+        Returns
+        -------
+        np.ndarray
+            Correlated shocks with shape (n_sims, n_steps-1, 4), where the last
+            dimension corresponds to [power_short, power_long, coal_short, coal_long].
+        """
         dW_indep = np.random.normal(size=(n_sims, n_steps - 1, 4))
 
         rho_power = self.two_factor_power_model.rho
@@ -96,11 +112,40 @@ class SpreadModel:
         return dW_corr
 
     def simulate(
-        self,
-        power_fwd_0: pd.Series,
-        coal_fwd_0: pd.Series,
-        n_sims: int,
+            self,
+            power_fwd_0: pd.Series,
+            coal_fwd_0: pd.Series,
+            n_sims: int,
+            **kwargs
     ) -> tuple[xr.DataArray, xr.DataArray, xr.DataArray, xr.DataArray]:
+        """
+        Run a joint simulation of power and coal forward curves.
+
+        Parameters
+        ----------
+        power_fwd_0 : pd.Series
+            Initial power forward curve values indexed by delivery start dates.
+        coal_fwd_0 : pd.Series
+            Initial coal forward curve values indexed by delivery start dates.
+        n_sims : int
+            Number of Monte Carlo simulation paths to generate.
+        **kwargs : dict
+            Additional keyword arguments for optional configuration
+            (e.g. flags like `use_cache`, random seeds, etc.).
+
+        Returns
+        -------
+        tuple[xr.DataArray, xr.DataArray, xr.DataArray, xr.DataArray]
+            A 4-tuple containing:
+            - power_fwds : xr.DataArray
+              Simulated power forward curves across simulation paths and dates.
+            - power_month_ahead : xr.DataArray
+              Derived month-ahead forwards from the power simulations.
+            - coal_fwds : xr.DataArray
+              Simulated coal forward curves across simulation paths and dates.
+            - coal_month_ahead : xr.DataArray
+              Derived month-ahead forwards from the coal simulations.
+        """
         n_steps = len(self.simulation_days)
         dw = self._generate_dW_values(n_sims, n_steps)
 
