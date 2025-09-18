@@ -189,6 +189,57 @@ class ForwardCurve:
         return ForwardCurve(series=series, as_of_date=as_of_date, name=name)
 
 
+def generate_yearly_seasonal_curve(
+        as_of_date: pd.Timestamp,
+        start_date: pd.Timestamp,
+        end_date: pd.Timestamp,
+        winter_value: float,
+        summer_value: float,
+        name: Optional[str] = "SeasonalForwardCurve"
+) -> ForwardCurve:
+    """
+    Generate a yearly seasonal ForwardCurve with peak in summer and trough in winter.
+
+    Parameters
+    ----------
+    as_of_date : pd.Timestamp
+        Reference date of the forward curve.
+    start_date : pd.Timestamp
+        Start date of the curve.
+    end_date : pd.Timestamp
+        End date of the curve.
+    winter_value : float
+        Minimum value (attained in mid-winter, ~Dec 21).
+    summer_value : float
+        Maximum value (attained in mid-summer, ~Jun 21).
+    name : str, optional
+        Name of the forward curve.
+
+    Returns
+    -------
+    ForwardCurve
+        ForwardCurve instance with daily seasonal values.
+    """
+    dates = pd.date_range(start=start_date, end=end_date, freq="D")
+
+    # Day of year
+    day_of_year = np.array([d.timetuple().tm_yday for d in dates])
+
+    # Approximate peak/trough in northern hemisphere
+    peak_day = 172  # ~June 21
+    trough_day = 355  # ~Dec 21
+
+    # Map day_of_year to sine function (peak at summer, trough at winter)
+    theta = 2 * np.pi * (day_of_year - peak_day) / 365
+    sin_norm = 0.5 * (1 + np.sin(theta))  # scale [0,1]
+
+    # Scale to winter → summer values
+    values = winter_value + sin_norm * (summer_value - winter_value)
+
+    series = pd.Series(data=values, index=dates)
+    return ForwardCurve(series=series, as_of_date=as_of_date, name=name)
+
+
 if __name__ == "__main__":
     # -------------------------------
     # Example usage of ForwardCurve
@@ -254,3 +305,13 @@ if __name__ == "__main__":
     )
     print(flat_curve)
     flat_curve.plot(title="Flat Forward Curve Example")
+
+    seasonal_curve: ForwardCurve = generate_yearly_seasonal_curve(
+        as_of_date=as_of_date,
+        start_date=start_date,
+        end_date=end_date,
+        winter_value=50.0,
+        summer_value=100.0,
+    )
+    print(seasonal_curve)
+    seasonal_curve.plot(title="Seasonal Forward Curve Example")

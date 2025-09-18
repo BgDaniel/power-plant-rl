@@ -1,6 +1,6 @@
 import pandas as pd
 
-from forward_curve.forward_curve import ForwardCurve
+from forward_curve.forward_curve import ForwardCurve, generate_yearly_seasonal_curve
 from market_simulation.spread_model.spread_model import SpreadModel
 from valuation.operations_states import OperationalState
 from valuation.power_plant.ops_plot import OpsPlot
@@ -22,20 +22,19 @@ spread_model = SpreadModel(
 
 n_sims = 1000
 
-power_fwd_0 = ForwardCurve.generate_curve(
-    as_of_date=as_of_date,
-    start_date=simulation_start,
-    end_date=simulation_end,
-    start_value=80.0,
-    end_value=110.0,
-    name="Power Forward Curve",
-)
+power_fwd_0 = generate_yearly_seasonal_curve(
+        as_of_date=as_of_date,
+        start_date=simulation_start,
+        end_date=simulation_end,
+        winter_value=120,
+        summer_value=60.0,
+    )
 
 coal_fwd_0 = ForwardCurve.generate_curve(
     as_of_date=as_of_date,
     start_date=simulation_start,
     end_date=simulation_end,
-    start_value=120.0,
+    start_value=90.0,
     end_value=70.0,
     name="Coal Forward Curve",
 )

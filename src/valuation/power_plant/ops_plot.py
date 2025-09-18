@@ -130,7 +130,7 @@ class OpsPlot:
         # Prepare figure with 4 rows
         fig, axes = plt.subplots(
             4, 1,
-            figsize=(14, 12),
+            figsize=(10, 8),
             sharex=True,
             gridspec_kw={'height_ratios': [1, 1, 1, 0.1]}  # fourth row is half height
         )
