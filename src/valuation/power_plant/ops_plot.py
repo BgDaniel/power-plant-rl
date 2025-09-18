@@ -128,7 +128,12 @@ class OpsPlot:
         asset_days = self.power_plant.asset_days
 
         # Prepare figure with 4 rows
-        fig, axes = plt.subplots(4, 1, figsize=(14, 12), sharex=True)
+        fig, axes = plt.subplots(
+            4, 1,
+            figsize=(14, 12),
+            sharex=True,
+            gridspec_kw={'height_ratios': [1, 1, 1, 0.1]}  # fourth row is half height
+        )
 
         # --- Row 1: Values ---
         values = self.power_plant._optimal_value
@@ -140,17 +145,14 @@ class OpsPlot:
         value_upper2 = np.percentile(values, upper2 * 100, axis=1)
 
         ax1 = axes[0]
-        ax1.bar(asset_days, value_mean, width=0.8, alpha=0.5, color="gray", label="Mean Value")
-        ax1.plot(asset_days, value_lower2, color="black", linestyle="--", alpha=0.5, label=label_ci2)
-        ax1.plot(asset_days, value_upper2, color="black", linestyle="--", alpha=0.5)
-        ax1.plot(asset_days, value_lower1, color="black", linestyle="-.", alpha=0.5, label=label_ci1)
-        ax1.plot(asset_days, value_upper1, color="black", linestyle="-.", alpha=0.5)
+        ax1.plot(asset_days, value_mean, lw=1.5, color="yellow", label="Mean", linestyle="--")
+        ax1.fill_between(asset_days, value_lower2, value_upper2, color="blue", alpha=0.05, label=label_ci2)
+        ax1.fill_between(asset_days, value_lower1, value_upper1, color="blue", alpha=0.1, label=label_ci1)
 
         if path_index is not None:
-            ax1.plot(asset_days, values.iloc[:, path_index], color="red", lw=1.5, label=f"Path {path_index} Value")
+            ax1.plot(asset_days, values.iloc[:, path_index], color="red", lw=1, label=f"Path {path_index}")
 
-        ax1.set_ylabel("Power Plant Value")
-        ax1.set_title("Asset Values with Percentiles")
+        ax1.set_title("Asset Value")
         ax1.grid(True)
         ax1.legend(loc="upper left")
 
@@ -164,12 +166,12 @@ class OpsPlot:
         cash_upper2 = np.percentile(cashflows, upper2 * 100, axis=1)
 
         ax2 = axes[1]
-        ax2.plot(asset_days, cash_mean, color="blue", label="Expected Cashflow")
-        ax2.fill_between(asset_days, cash_lower2, cash_upper2, color="blue", alpha=0.2, label=label_ci2)
-        ax2.fill_between(asset_days, cash_lower1, cash_upper1, color="blue", alpha=0.4, label=label_ci1)
+        ax2.plot(asset_days, cash_mean, lw=1.5, color="yellow", label="Mean", linestyle="--")
+        ax2.fill_between(asset_days, cash_lower2, cash_upper2, color="blue", alpha=0.05, label=label_ci2)
+        ax2.fill_between(asset_days, cash_lower1, cash_upper1, color="blue", alpha=0.1, label=label_ci1)
 
         if path_index is not None:
-            ax2.plot(asset_days, cashflows.iloc[:, path_index], color="red", lw=1.5, label=f"Path {path_index} Cashflow")
+            ax2.plot(asset_days, cashflows.iloc[:, path_index], color="red", lw=1, label=f"Path {path_index}")
 
         ax2.set_title("Cashlows")
         ax2.grid(True)
@@ -185,23 +187,39 @@ class OpsPlot:
         spread_upper2 = np.percentile(spread, upper2 * 100, axis=1)
 
         ax3 = axes[2]
-        ax3.plot(asset_days, spread_mean, color="purple", label="Mean Spread")
-        ax3.fill_between(asset_days, spread_lower2, spread_upper2, color="purple", alpha=0.2, label=label_ci2)
-        ax3.fill_between(asset_days, spread_lower1, spread_upper1, color="purple", alpha=0.4, label=label_ci1)
+        ax3.plot(asset_days, spread_mean, lw=1.5, color="yellow", label="Mean", linestyle="--")
+        ax3.fill_between(asset_days, spread_lower2, spread_upper2, color="blue", alpha=0.05, label=label_ci2)
+        ax3.fill_between(asset_days, spread_lower1, spread_upper1, color="blue", alpha=0.1, label=label_ci1)
 
         if path_index is not None:
             spreads_path = spread.iloc[:, path_index]
-            ax3.plot(asset_days, spreads_path, color="red", lw=1.5, label=f"Path {path_index} Spread")
+            ax3.plot(asset_days, spreads_path, color="red", lw=1.0, label=f"Path {path_index}")
 
             # Add markers for ramping states
             states_path = self.power_plant._optimal_state.iloc[:, path_index]
             ramp_up_idx = [i for i, s in enumerate(states_path) if s == OperationalState.RAMPING_UP]
             ramp_down_idx = [i for i, s in enumerate(states_path) if s == OperationalState.RAMPING_DOWN]
-            ax3.scatter(asset_days[ramp_up_idx], spreads_path[ramp_up_idx], color="green", marker="^", label="Ramping Up")
-            ax3.scatter(asset_days[ramp_down_idx], spreads_path[ramp_down_idx], color="red", marker="v", label="Ramping Down")
+            # Ramping Up: green circle, slightly larger
+            ax3.scatter(
+                asset_days[ramp_up_idx],
+                spreads_path[ramp_up_idx],
+                color="green",
+                marker="o",
+                s=40,  # marker size
+                label="Ramping Up"
+            )
 
-        ax3.set_ylabel("Spread")
-        ax3.set_title("Spread Prices with Percentiles")
+            # Ramping Down: red cross, slightly larger
+            ax3.scatter(
+                asset_days[ramp_down_idx],
+                spreads_path[ramp_down_idx],
+                color="red",
+                marker="X",
+                s=40,  # marker size
+                label="Ramping Down"
+            )
+
+        ax3.set_title("Dark Spread")
         ax3.grid(True)
         ax3.legend(loc="upper left")
 
@@ -235,8 +253,8 @@ class OpsPlot:
             ax4.axvspan(day, day + pd.Timedelta(days=1), color=colors[i], linewidth=0)
 
         ax4.set_yticks([])
-        ax4.set_ylabel("State Fraction")
-        ax4.set_title("Operational State Heatmap Band")
+
+        ax4.set_title("Operational State")
         ax4.grid(False)
 
         plt.tight_layout()
