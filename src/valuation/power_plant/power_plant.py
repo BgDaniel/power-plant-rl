@@ -181,9 +181,7 @@ class PowerPlant:
             ),
             dims=[DIM_SIMULATION_DAY, DIM_SIMULATION_PATH, DIM_OPERATIONAL_STATE],
             coords={
-                DIM_SIMULATION_DAY: self.asset_days[
-                    :-1
-                ],  # no decision on last day
+                DIM_SIMULATION_DAY: self.asset_days[:-1],  # no decision on last day
                 DIM_SIMULATION_PATH: range(self.n_sims),
                 DIM_OPERATIONAL_STATE: self.operational_states,
             },
@@ -214,13 +212,21 @@ class PowerPlant:
         # Compute spread: power - efficiency * coal
         self._spread: pd.DataFrame = spots_power.sub(self.efficiency * spots_coal)
 
-        self._optimal_value = pd.DataFrame(np.zeros((self.n_steps, self.n_sims)),
-                                           index=self.asset_days, columns=range(self.n_sims))
-        self._optimal_state = pd.DataFrame(np.full((self.n_steps, self.n_sims),
-                                                   OperationalState.IDLE, dtype=object), index=self.asset_days,
-                                           columns=range(self.n_sims))
-        self._optimal_cashflow = pd.DataFrame(np.zeros((self.n_steps, self.n_sims)), index=self.asset_days,
-                                              columns=range(self.n_sims))
+        self._optimal_value = pd.DataFrame(
+            np.zeros((self.n_steps, self.n_sims)),
+            index=self.asset_days,
+            columns=range(self.n_sims),
+        )
+        self._optimal_state = pd.DataFrame(
+            np.full((self.n_steps, self.n_sims), OperationalState.IDLE, dtype=object),
+            index=self.asset_days,
+            columns=range(self.n_sims),
+        )
+        self._optimal_cashflow = pd.DataFrame(
+            np.zeros((self.n_steps, self.n_sims)),
+            index=self.asset_days,
+            columns=range(self.n_sims),
+        )
 
     def _initialize_terminal_state(self) -> None:
         """
@@ -409,7 +415,9 @@ class PowerPlant:
             cont_val > exer_val, OptimalControl.DO_NOTHING, OptimalControl.RAMPING_DOWN
         )
 
-    def _extract_front_months(self, fwds: xr.DataArray, simulation_day: pd.Timestamp) -> xr.DataArray:
+    def _extract_front_months(
+        self, fwds: xr.DataArray, simulation_day: pd.Timestamp
+    ) -> xr.DataArray:
         """
         Extract front month forward prices where delivery start dates lie between the given
         simulation_day and the end of asset_days.
@@ -430,7 +438,9 @@ class PowerPlant:
         start = pd.Timestamp(simulation_day)
         end = self.asset_days[-1]  # last asset day
 
-        return fwds.sel({DELIVERY_START: slice(start, end), SIMULATION_DAY: simulation_day})
+        return fwds.sel(
+            {DELIVERY_START: slice(start, end), SIMULATION_DAY: simulation_day}
+        )
 
     def _regress(
         self,
@@ -466,12 +476,22 @@ class PowerPlant:
         spots_power = self.spots_power.loc[simulation_day].values
         spots_coal = self.spots_coal.loc[simulation_day].values
 
-        fwds_power_front_months = self._extract_front_months(self.fwds_power, simulation_day).values
-        fwds_coal_front_months = self._extract_front_months(self.fwds_coal, simulation_day).values
+        fwds_power_front_months = self._extract_front_months(
+            self.fwds_power, simulation_day
+        ).values
+        fwds_coal_front_months = self._extract_front_months(
+            self.fwds_coal, simulation_day
+        ).values
 
         # Stack features
-        x = np.hstack([spots_power.reshape(-1, 1), spots_coal.reshape(-1, 1),
-                       fwds_power_front_months, fwds_coal_front_months])
+        x = np.hstack(
+            [
+                spots_power.reshape(-1, 1),
+                spots_coal.reshape(-1, 1),
+                fwds_power_front_months,
+                fwds_coal_front_months,
+            ]
+        )
 
         # Extract target values: optimal value for the next day
         y = (
@@ -527,16 +547,16 @@ class PowerPlant:
         first_day = self.asset_days[0]
         self._optimal_state.loc[first_day, :] = self._initial_state
         self._optimal_value.loc[first_day, :] = self.values.sel(
-            simulation_day=first_day,
-            operational_state=self._initial_state
+            simulation_day=first_day, operational_state=self._initial_state
         ).values
         self._optimal_cashflow.loc[first_day, :] = self._cashflows.sel(
-            simulation_day=first_day,
-            operational_state=self._initial_state
+            simulation_day=first_day, operational_state=self._initial_state
         ).values
 
         # Remaining days
-        for idx, (current_day, prev_day) in enumerate(zip(self.asset_days[1:], self.asset_days[:-1])):
+        for idx, (current_day, prev_day) in enumerate(
+            zip(self.asset_days[1:], self.asset_days[:-1])
+        ):
             day_start = time.time()
 
             # Previous states as Series of enums
@@ -545,26 +565,30 @@ class PowerPlant:
             # Previous optimal control as DataArray
             prev_optimal_control = self._optimal_control.sel(
                 simulation_day=prev_day,
-                operational_state=xr.DataArray(prev_optimal_states, dims=DIM_SIMULATION_PATH)
+                operational_state=xr.DataArray(
+                    prev_optimal_states, dims=DIM_SIMULATION_PATH
+                ),
             )
 
             # Vectorized next state computation
-            current_optimal_state_values = get_next_state(prev_optimal_states, prev_optimal_control)
+            current_optimal_state_values = get_next_state(
+                prev_optimal_states, prev_optimal_control
+            )
 
             # Store next states
             self._optimal_state.loc[current_day, :] = current_optimal_state_values
 
             # Wrap into DataArray for selection
-            current_optimal_states = xr.DataArray(current_optimal_state_values, dims=DIM_SIMULATION_PATH)
+            current_optimal_states = xr.DataArray(
+                current_optimal_state_values, dims=DIM_SIMULATION_PATH
+            )
 
             # Fill value and cashflow
             self._optimal_value.loc[current_day, :] = self.values.sel(
-                simulation_day=current_day,
-                operational_state=current_optimal_states
+                simulation_day=current_day, operational_state=current_optimal_states
             ).values
             self._optimal_cashflow.loc[current_day, :] = self._cashflows.sel(
-                simulation_day=current_day,
-                operational_state=current_optimal_states
+                simulation_day=current_day, operational_state=current_optimal_states
             ).values
 
         total_elapsed = time.time() - start_time

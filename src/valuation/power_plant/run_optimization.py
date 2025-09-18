@@ -23,12 +23,12 @@ spread_model = SpreadModel(
 n_sims = 1000
 
 power_fwd_0 = generate_yearly_seasonal_curve(
-        as_of_date=as_of_date,
-        start_date=simulation_start,
-        end_date=simulation_end,
-        winter_value=120,
-        summer_value=60.0,
-    )
+    as_of_date=as_of_date,
+    start_date=simulation_start,
+    end_date=simulation_end,
+    winter_value=120,
+    summer_value=60.0,
+)
 
 coal_fwd_0 = ForwardCurve.generate_curve(
     as_of_date=as_of_date,
@@ -39,13 +39,10 @@ coal_fwd_0 = ForwardCurve.generate_curve(
     name="Coal Forward Curve",
 )
 
-(power_fwd,
-power_month_ahead,
-power_spot,
-coal_fwd,
-coal_month_ahead,
-coal_spot) = spread_model.simulate(
-    power_fwd_0=power_fwd_0, coal_fwd_0=coal_fwd_0, n_sims=n_sims, use_cache=True
+(power_fwd, power_month_ahead, power_spot, coal_fwd, coal_month_ahead, coal_spot) = (
+    spread_model.simulate(
+        power_fwd_0=power_fwd_0, coal_fwd_0=coal_fwd_0, n_sims=n_sims, use_cache=True
+    )
 )
 
 asset_start = simulation_start
@@ -58,10 +55,10 @@ initial_state = OperationalState.IDLE
 power_plant = PowerPlant(
     n_sims=n_sims,
     asset_days=asset_days,
-    initial_state=initial_state ,
+    initial_state=initial_state,
     spots_power=power_spot,
     spots_coal=coal_spot,
-    fwds_power= power_fwd,
+    fwds_power=power_fwd,
     fwds_coal=coal_fwd,
     fwd_0_power=power_fwd_0,
     fwd_0_coal=coal_fwd_0,
@@ -73,5 +70,5 @@ power_plant.optimize()
 
 ops_plot = OpsPlot(power_plant)
 
-#ops_plot.plot_r2()
+# ops_plot.plot_r2()
 ops_plot.plot_simulation_summary(path_index=0)

@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class OptimalControl(Enum):
     """Enum for the optimal control actions that the plant can take."""
 
