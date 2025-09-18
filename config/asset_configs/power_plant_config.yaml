@@ -25,4 +25,4 @@ technical_constraints:
   n_days_ramping_down: 1
 
   # Coefficient for operational cost factor
-  efficiency: 0.4
+  efficiency: 0.9

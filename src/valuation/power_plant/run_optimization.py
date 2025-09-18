@@ -35,12 +35,17 @@ coal_fwd_0 = ForwardCurve.generate_curve(
     as_of_date=as_of_date,
     start_date=simulation_start,
     end_date=simulation_end,
-    start_value=60.0,
-    end_value=85.0,
+    start_value=120.0,
+    end_value=70.0,
     name="Coal Forward Curve",
 )
 
-_, _, power_day_ahead, _, _, coal_day_ahead = spread_model.simulate(
+(power_fwd,
+power_month_ahead,
+power_spot,
+coal_fwd,
+coal_month_ahead,
+coal_spot) = spread_model.simulate(
     power_fwd_0=power_fwd_0, coal_fwd_0=coal_fwd_0, n_sims=n_sims, use_cache=True
 )
 
@@ -55,8 +60,10 @@ power_plant = PowerPlant(
     n_sims=n_sims,
     asset_days=asset_days,
     initial_state=initial_state ,
-    spots_power=power_day_ahead,
-    spots_coal=coal_day_ahead,
+    spots_power=power_spot,
+    spots_coal=coal_spot,
+    fwds_power= power_fwd,
+    fwds_coal=coal_fwd,
     fwd_0_power=power_fwd_0,
     fwd_0_coal=coal_fwd_0,
     config_path="asset_configs/power_plant_config.yaml",
@@ -66,6 +73,6 @@ power_plant = PowerPlant(
 power_plant.optimize()
 
 ops_plot = OpsPlot(power_plant)
-ops_plot.plot_r2()
 
-ops_plot.plot_operation_along_path(path_index=0)
+#ops_plot.plot_r2()
+ops_plot.plot_simulation_summary(path_index=0)

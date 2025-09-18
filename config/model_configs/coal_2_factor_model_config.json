@@ -1,9 +1,9 @@
 {
   "sigma_s": 0.2,
   "kappa_s": 4.0,
-  "sigma_l": 0.1,
-  "kappa_l": 0.2,
+  "sigma_l": 0.03,
+  "kappa_l": 0.02,
   "rho": 0.6,
   "beta": 0.2,
-  "sigma": 3.0
+  "sigma": 0.3
 }

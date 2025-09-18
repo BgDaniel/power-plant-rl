@@ -8,6 +8,7 @@ import time
 from typing import Tuple
 
 from forward_curve.forward_curve import ForwardCurve
+from market_simulation.constants import DELIVERY_START, SIMULATION_DAY
 from valuation.operations_states import OperationalState, get_next_state
 from valuation.operational_control import OptimalControl
 
@@ -76,8 +77,10 @@ class PowerPlant:
         initial_state: OperationalState,
         spots_power: pd.DataFrame,
         spots_coal: pd.DataFrame,
+        fwds_power: xr.DataArray,
+        fwds_coal: xr.DataArray,
         fwd_0_power: ForwardCurve,
-            fwd_0_coal: ForwardCurve,
+        fwd_0_coal: ForwardCurve,
         config: Optional[PowerPlantConfig] = None,
         config_path: Optional[str] = None,
         polynomial_type: str = PolynomialRegression.POLY_LEGENDRE,
@@ -115,8 +118,11 @@ class PowerPlant:
         self._initial_state = initial_state
 
         # Market data
-        self.power_day_ahead_prices: pd.DataFrame = spots_power
-        self.coal_day_ahead_prices: pd.DataFrame = spots_coal
+        self.spots_power: pd.DataFrame = spots_power
+        self.spots_coal: pd.DataFrame = spots_coal
+
+        self.fwds_power: xr.DataArray = fwds_power
+        self.fwds_coal: xr.DataArray = fwds_coal
 
         self.fwd_0_power = fwd_0_power
         self.fwd_0_coal = fwd_0_coal
@@ -403,6 +409,29 @@ class PowerPlant:
             cont_val > exer_val, OptimalControl.DO_NOTHING, OptimalControl.RAMPING_DOWN
         )
 
+    def _extract_front_months(self, fwds: xr.DataArray, simulation_day: pd.Timestamp) -> xr.DataArray:
+        """
+        Extract front month forward prices where delivery start dates lie between the given
+        simulation_day and the end of asset_days.
+
+        Parameters
+        ----------
+        fwds_power : xr.DataArray
+            Forward curve array with dims (SIMULATION_PATH, SIMULATION_DAY, DELIVERY_START).
+        simulation_day : pd.Timestamp
+            The current simulation day.
+
+        Returns
+        -------
+        xr.DataArray
+            Filtered forward prices with restricted DELIVERY_START.
+        """
+        # Define interval
+        start = pd.Timestamp(simulation_day)
+        end = self.asset_days[-1]  # last asset day
+
+        return fwds.sel({DELIVERY_START: slice(start, end), SIMULATION_DAY: simulation_day})
+
     def _regress(
         self,
         simulation_day: pd.Timestamp,
@@ -434,11 +463,15 @@ class PowerPlant:
             If the R² score of the regression is below the specified threshold.
         """
         # Extract day-ahead power and coal prices for the given day
-        day_ahead_power = self.power_day_ahead_prices.loc[simulation_day].values
-        day_ahead_coal = self.coal_day_ahead_prices.loc[simulation_day].values
+        spots_power = self.spots_power.loc[simulation_day].values
+        spots_coal = self.spots_coal.loc[simulation_day].values
+
+        fwds_power_front_months = self._extract_front_months(self.fwds_power, simulation_day).values
+        fwds_coal_front_months = self._extract_front_months(self.fwds_coal, simulation_day).values
 
         # Stack features
-        x = np.vstack([day_ahead_power, day_ahead_coal]).T
+        x = np.hstack([spots_power.reshape(-1, 1), spots_coal.reshape(-1, 1),
+                       fwds_power_front_months, fwds_coal_front_months])
 
         # Extract target values: optimal value for the next day
         y = (

@@ -1,4 +1,5 @@
 import matplotlib
+import pandas as pd
 
 from valuation.operations_states import OperationalState
 
@@ -93,198 +94,150 @@ class OpsPlot:
         plt.tight_layout()
         plt.show(block=True)
 
-    def plot_operation_along_path(self, path_index: int) -> None:
+    def plot_simulation_summary(
+        self,
+        confidence_levels: tuple[float, float] = (0.01, 0.05),
+        path_index: int | None = None
+    ) -> None:
         """
-        Detailed three-row plot for a single simulation path.
+        Plot simulation statistics aggregated over all simulation paths with optional single-path overlay.
 
-        1. Optimal value + cashflows
-        2. Spread with ramp-up/down markers
-        3. Operational state timeline
+        Row 1: Cashflows mean ± 1%/5% percentiles (shaded bands).
+               If path_index is provided: overlay the cashflow of that path.
+        Row 2: Power plant values mean ± 1%/5% percentiles (bar plot style).
+               If path_index is provided: overlay the path's values.
+        Row 3: Spread mean ± 1%/5% percentiles.
+               If path_index is provided: overlay the spread along this path + markers for ramping up/down.
+        Row 4: Left blank (reserved for later).
 
         Parameters
         ----------
-        path_index : int
-            Index of the simulation path to visualize.
+        confidence_levels : tuple[float, float], default=(0.01, 0.05)
+            Percentile levels for confidence shading/bands. Example: (0.01, 0.05) → 1% and 5% bands.
+        path_index : int or None, optional
+            Index of the simulation path to overlay. If None, only aggregates are plotted.
         """
+        import matplotlib.dates as mdates
+
+        lower1, lower2 = confidence_levels
+
+        label_ci1 = f"{int(lower1 * 100)}% CI"
+        label_ci2 = f"{int(lower2 * 100)}% CI"
+
+        upper1, upper2 = 1 - lower1, 1 - lower2
         asset_days = self.power_plant.asset_days
 
-        # Row 1: Optimal value and cashflows
-        optimal_values = self.power_plant._optimal_value.iloc[:,path_index]
-        cashflows = self.power_plant._optimal_cashflow.iloc[:,path_index]
+        # Prepare figure with 4 rows
+        fig, axes = plt.subplots(4, 1, figsize=(14, 12), sharex=True)
 
-        # Row 2: Spread and ramp markers
-        spreads = self.power_plant._spread.iloc[:,path_index]
-        states = self.power_plant._optimal_state.iloc[:,path_index]
-        ramp_up_idx = [i for i, s in enumerate(states) if s == OperationalState.RAMPING_UP]
-        ramp_down_idx = [i for i, s in enumerate(states) if s == OperationalState.RAMPING_DOWN]
+        # --- Row 1: Values ---
+        values = self.power_plant._optimal_value
 
-        # Row 3: Operational state timeline
-        color_map = {'RUNNING': 'green', 'IDLE': 'red', 'RAMPING_UP': 'yellow', 'RAMPING_DOWN': 'yellow'}
-        state_colors = [color_map.get(s, 'gray') for s in states]
+        value_mean = values.mean(axis=1)
+        value_lower1 = np.percentile(values, lower1 * 100, axis=1)
+        value_upper1 = np.percentile(values, upper1 * 100, axis=1)
+        value_lower2 = np.percentile(values, lower2 * 100, axis=1)
+        value_upper2 = np.percentile(values, upper2 * 100, axis=1)
 
-        fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(14, 10), sharex=True,
-                                            gridspec_kw={'height_ratios': [2, 2, 2, 0.5]})
+        ax1 = axes[0]
+        ax1.bar(asset_days, value_mean, width=0.8, alpha=0.5, color="gray", label="Mean Value")
+        ax1.plot(asset_days, value_lower2, color="black", linestyle="--", alpha=0.5, label=label_ci2)
+        ax1.plot(asset_days, value_upper2, color="black", linestyle="--", alpha=0.5)
+        ax1.plot(asset_days, value_lower1, color="black", linestyle="-.", alpha=0.5, label=label_ci1)
+        ax1.plot(asset_days, value_upper1, color="black", linestyle="-.", alpha=0.5)
 
-        # --- Row 1 ---
-        ax1.plot(asset_days, optimal_values, color='blue', label='Optimal Value')
+        if path_index is not None:
+            ax1.plot(asset_days, values.iloc[:, path_index], color="red", lw=1.5, label=f"Path {path_index} Value")
+
+        ax1.set_ylabel("Power Plant Value")
+        ax1.set_title("Asset Values with Percentiles")
         ax1.grid(True)
-        ax1_twin = ax1.twinx()
-        ax1_twin.bar(asset_days, cashflows, color='orange', alpha=0.5, label='Cashflows')
-        ax1.set_title(f"Asset Value and Cashflows along path {path_index}")
-        ax1.legend(loc='upper left')
-        ax1_twin.legend(loc='upper right')
+        ax1.legend(loc="upper left")
 
-        # --- Row 2 ---
-        ax2.plot(asset_days, spreads.loc[asset_days], color='purple', label='Spread')
-        ax2.scatter(asset_days[ramp_up_idx], spreads[ramp_up_idx], color='green', marker='^', label='ramping up', zorder=5)
-        ax2.scatter(asset_days[ramp_down_idx], spreads[ramp_down_idx], color='red', marker='v', label='ramping down', zorder=5)
-        ax2.set_title("Clean Dark Spread")
+        # --- Row 2: Cashflows ---
+        cashflows = self.power_plant._optimal_cashflow  # shape (n_days, n_paths) or (n_paths, n_days)
+
+        cash_mean = cashflows.mean(axis=1)
+        cash_lower1 = np.percentile(cashflows, lower1 * 100, axis=1)
+        cash_upper1 = np.percentile(cashflows, upper1 * 100, axis=1)
+        cash_lower2 = np.percentile(cashflows, lower2 * 100, axis=1)
+        cash_upper2 = np.percentile(cashflows, upper2 * 100, axis=1)
+
+        ax2 = axes[1]
+        ax2.plot(asset_days, cash_mean, color="blue", label="Expected Cashflow")
+        ax2.fill_between(asset_days, cash_lower2, cash_upper2, color="blue", alpha=0.2, label=label_ci2)
+        ax2.fill_between(asset_days, cash_lower1, cash_upper1, color="blue", alpha=0.4, label=label_ci1)
+
+        if path_index is not None:
+            ax2.plot(asset_days, cashflows.iloc[:, path_index], color="red", lw=1.5, label=f"Path {path_index} Cashflow")
+
+        ax2.set_title("Cashlows")
         ax2.grid(True)
-        ax2.legend()
+        ax2.legend(loc="upper left")
 
-        # Third row: difference between power and coal forward curves
-        ax3.plot(asset_days, self.fwd_0_power.loc[asset_days], label="Power", color="blue", linestyle="-")
-        ax3.plot(asset_days, self.fwd_0_coal.loc[asset_days], label="Coal", color="brown", linestyle="--")
-        ax3.set_xlabel("Simulation Day")
-        ax3.set_title("Initial Forward Curves")
-        ax3.legend(loc="upper right")
+        # --- Row 3: Spread ---
+        spread = self.power_plant._spread.loc[asset_days]
+
+        spread_mean = spread.mean(axis=1)
+        spread_lower1 = np.percentile(spread, lower1 * 100, axis=1)
+        spread_upper1 = np.percentile(spread, upper1 * 100, axis=1)
+        spread_lower2 = np.percentile(spread, lower2 * 100, axis=1)
+        spread_upper2 = np.percentile(spread, upper2 * 100, axis=1)
+
+        ax3 = axes[2]
+        ax3.plot(asset_days, spread_mean, color="purple", label="Mean Spread")
+        ax3.fill_between(asset_days, spread_lower2, spread_upper2, color="purple", alpha=0.2, label=label_ci2)
+        ax3.fill_between(asset_days, spread_lower1, spread_upper1, color="purple", alpha=0.4, label=label_ci1)
+
+        if path_index is not None:
+            spreads_path = spread.iloc[:, path_index]
+            ax3.plot(asset_days, spreads_path, color="red", lw=1.5, label=f"Path {path_index} Spread")
+
+            # Add markers for ramping states
+            states_path = self.power_plant._optimal_state.iloc[:, path_index]
+            ramp_up_idx = [i for i, s in enumerate(states_path) if s == OperationalState.RAMPING_UP]
+            ramp_down_idx = [i for i, s in enumerate(states_path) if s == OperationalState.RAMPING_DOWN]
+            ax3.scatter(asset_days[ramp_up_idx], spreads_path[ramp_up_idx], color="green", marker="^", label="Ramping Up")
+            ax3.scatter(asset_days[ramp_down_idx], spreads_path[ramp_down_idx], color="red", marker="v", label="Ramping Down")
+
+        ax3.set_ylabel("Spread")
+        ax3.set_title("Spread Prices with Percentiles")
         ax3.grid(True)
+        ax3.legend(loc="upper left")
 
-        # Fourth row: operational state as numeric series with color segments
-        state_numeric = []
-        state_colors = []
-        for s in self._optimal_state.loc[asset_days, path_index]:  # replace path_index with the desired path
-            if s == OperationalState.IDLE:
-                state_numeric.append(0)
-                state_colors.append("red")
-            elif s == OperationalState.RUNNING:
-                state_numeric.append(1)
-                state_colors.append("green")
-            elif s in (OperationalState.RAMPING_UP, OperationalState.RAMPING_DOWN):
-                state_numeric.append(0.5)
-                state_colors.append("yellow")
-            else:
-                state_numeric.append(np.nan)
-                state_colors.append("gray")
+        # --- Row 4: State fraction heatmap ---
+        ax4 = axes[3]
 
-        # Plot colored line segments
-        for i in range(len(asset_days)-1):
-            ax4.plot(
-                asset_days[i:i+2],
-                state_numeric[i:i+2],
-                color=state_colors[i],
-                linewidth=2
-            )
+        # Map OperationalState to numeric categories
+        state_map = {
+            OperationalState.IDLE: 0,
+            OperationalState.RAMPING_UP: 1,
+            OperationalState.RAMPING_DOWN: 1,
+            OperationalState.RUNNING: 2
+        }
 
-        ax4.set_ylim(-0.1, 1.1)
-        ax4.set_yticks([0, 0.5, 1])
-        ax4.set_yticklabels(["IDLE", "RAMPING", "RUNNING"])
-        ax4.set_xlabel("Simulation Day")
-        ax4.set_title("Operational State Timeline (Colored)")
-        ax4.grid(True)
+        # Convert states to numeric array: shape (n_days, n_paths)
+        states_array = np.vectorize(state_map.get)(self.power_plant._optimal_state.values)  # shape: (n_days, n_paths)
+
+        # Compute fractions for each simulation day
+        frac_idle = (states_array == 0).mean(axis=1)
+        frac_ramping = (states_array == 1).mean(axis=1)
+        frac_running = (states_array == 2).mean(axis=1)
+
+        # Stack fractions into RGB colors: ramping split between red and green for yellow
+        colors = np.zeros((len(asset_days), 3))
+        colors[:, 0] = frac_idle + 0.5 * frac_ramping  # red channel: idle + half ramping
+        colors[:, 1] = frac_running + 0.5 * frac_ramping  # green channel: running + half ramping
+        colors[:, 2] = 0  # blue channel remains zero
+
+        # Plot as colored band
+        for i, day in enumerate(asset_days):
+            ax4.axvspan(day, day + pd.Timedelta(days=1), color=colors[i], linewidth=0)
+
+        ax4.set_yticks([])
+        ax4.set_ylabel("State Fraction")
+        ax4.set_title("Operational State Heatmap Band")
+        ax4.grid(False)
 
         plt.tight_layout()
         plt.show(block=True)
-
-def plot_simulation_statistics_with_state_heatmap(
-    self,
-    confidence_levels: tuple[float, float] = (0.01, 0.05)
-) -> None:
-    """
-    Plot simulation statistics aggregated over all simulation paths with a state heatmap.
-
-    Row 1: Power plant value mean ± 1%/5% percentiles, cashflows mean ± percentiles.
-    Row 2: Spread price mean ± 1%/5% percentiles.
-    Row 3: Heatmap of operational states (red=idle, yellow=ramping, green=running)
-           showing fraction of simulation paths in each state per day.
-
-    Parameters
-    ----------
-    confidence_levels : tuple[float, float], default=(0.01, 0.05)
-        Lower percentile levels for confidence shading.
-    """
-    import matplotlib.dates as mdates
-
-    lower1, lower2 = confidence_levels
-    upper1, upper2 = 1 - lower1, 1 - lower2
-
-    sim_days = self.power_plant.asset_days[1:]
-
-    # -----------------------------
-    # Row 1: Power plant value + cashflows
-    # -----------------------------
-    values = self.power_plant.asset_values  # shape: (n_paths, n_days)
-    cashflows = self.power_plant._cashflows  # shape: (n_paths, n_days)
-
-    value_mean = values.mean(axis=0)
-    value_lower1 = np.percentile(values, lower1 * 100, axis=0)
-    value_upper1 = np.percentile(values, upper1 * 100, axis=0)
-    value_lower2 = np.percentile(values, lower2 * 100, axis=0)
-    value_upper2 = np.percentile(values, upper2 * 100, axis=0)
-
-    cash_mean = cashflows.mean(axis=0)
-    cash_lower1 = np.percentile(cashflows, lower1 * 100, axis=0)
-    cash_upper1 = np.percentile(cashflows, upper1 * 100, axis=0)
-
-    fig, axes = plt.subplots(3, 1, figsize=(14, 10), sharex=True)
-
-    ax1 = axes[0]
-    ax1.plot(sim_days, value_mean, color="blue", label="Mean Value")
-    ax1.fill_between(sim_days, value_lower2, value_upper2, color="blue", alpha=0.2, label="5% CI")
-    ax1.fill_between(sim_days, value_lower1, value_upper1, color="blue", alpha=0.4, label="1% CI")
-    ax1.set_ylabel("Power Plant Value")
-    ax1.grid(True)
-
-    ax2 = ax1.twinx()
-    ax2.bar(sim_days, cash_mean, width=0.8, alpha=0.5, color="gray", label="Mean Cashflow")
-    ax2.set_ylabel("Cashflows")
-    ax2.grid(False)
-
-    # -----------------------------
-    # Row 2: Spread price
-    # -----------------------------
-    spread = self.power_plant.spread_prices  # shape: (n_paths, n_days)
-    spread_mean = spread.mean(axis=0)
-    spread_lower1 = np.percentile(spread, lower1 * 100, axis=0)
-    spread_upper1 = np.percentile(spread, upper1 * 100, axis=0)
-    spread_lower2 = np.percentile(spread, lower2 * 100, axis=0)
-    spread_upper2 = np.percentile(spread, upper2 * 100, axis=0)
-
-    ax3 = axes[1]
-    ax3.plot(sim_days, spread_mean, color="purple", label="Mean Spread")
-    ax3.fill_between(sim_days, spread_lower2, spread_upper2, color="purple", alpha=0.2, label="5% CI")
-    ax3.fill_between(sim_days, spread_lower1, spread_upper1, color="purple", alpha=0.4, label="1% CI")
-    ax3.set_ylabel("Spread Price")
-    ax3.grid(True)
-
-    # -----------------------------
-    # Row 3: State heatmap
-    # -----------------------------
-    # Map operational states to numbers: 0=idle, 1=ramping (up/down), 2=running
-    state_map = {"IDLE": 0, "RAMPING_UP": 1, "RAMPING_DOWN": 1, "RUNNING": 2}
-    states_array = np.vectorize(state_map.get)(self.power_plant.operational_state_matrix)  # shape: (n_paths, n_days)
-
-    # Compute fractions
-    frac_idle = (states_array == 0).mean(axis=0)
-    frac_ramping = (states_array == 1).mean(axis=0)
-    frac_running = (states_array == 2).mean(axis=0)
-
-    # Combine fractions to RGB colors: red=idle, yellow=ramping, green=running
-    colors = np.stack([frac_idle, frac_ramping, frac_running], axis=1)
-
-    ax4 = axes[2]
-    for i, day in enumerate(sim_days):
-        ax4.axvspan(day, day + pd.Timedelta(days=1), color=colors[i], linewidth=0)
-
-    ax4.set_ylabel("State Fraction")
-    ax4.set_yticks([])
-    ax4.grid(False)
-
-    axes[2].xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-    fig.autofmt_xdate(rotation=45)
-
-    ax1.legend(loc="upper left")
-    ax3.legend(loc="upper left")
-    ax2.legend(loc="upper right")
-    plt.tight_layout()
-    plt.show()
