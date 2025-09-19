@@ -25,8 +25,11 @@ def cache_simulation(func):
     - Stores `fwds` (xarray.DataArray) as NetCDF.
     - Stores `month_ahead` and `spot_prices` (pandas DataFrames) as CSV.
     """
+
     @wraps(func)
-    def wrapper(self, fwd_0: pd.Series, n_sims: int, *args, use_cache: bool = True, **kwargs):
+    def wrapper(
+        self, fwd_0: pd.Series, n_sims: int, *args, use_cache: bool = True, **kwargs
+    ):
         if not use_cache:
             return func(self, fwd_0, n_sims, *args, **kwargs)
 
@@ -38,7 +41,11 @@ def cache_simulation(func):
         config_dict = {
             "as_of_date": str(getattr(self, "as_of_date", None)),
             "simulation_days": [str(d) for d in getattr(self, "simulation_days", [])],
-            "params": getattr(self, "params", None).__dict__ if getattr(self, "params", None) else None,
+            "params": (
+                getattr(self, "params", None).__dict__
+                if getattr(self, "params", None)
+                else None
+            ),
             "config_path": getattr(self, "config_path", None),
             "sigma_s": getattr(self, "sigma_s", None),
             "kappa_s": getattr(self, "kappa_s", None),
@@ -48,7 +55,10 @@ def cache_simulation(func):
             "beta": getattr(self, "beta", None),
             "sigma": getattr(self, "sigma", None),
             "n_sims": n_sims,
-            "fwd_0": {"index": [str(d) for d in fwd_0.index], "values": fwd_0.values.tolist()},
+            "fwd_0": {
+                "index": [str(d) for d in fwd_0.index],
+                "values": fwd_0.values.tolist(),
+            },
         }
         json_str = json.dumps(config_dict, sort_keys=True)
         sim_hash = hashlib.md5(json_str.encode()).hexdigest()
@@ -62,7 +72,11 @@ def cache_simulation(func):
         spot_prices_file = os.path.join(run_folder, SPOT_PRICES_FILE)
 
         # Try loading cache
-        if os.path.exists(fwds_file) and os.path.exists(month_ahead_file) and os.path.exists(spot_prices_file):
+        if (
+            os.path.exists(fwds_file)
+            and os.path.exists(month_ahead_file)
+            and os.path.exists(spot_prices_file)
+        ):
             fwds = xr.load_dataarray(fwds_file)
             month_ahead = pd.read_csv(month_ahead_file, index_col=0, parse_dates=True)
             spot_prices = pd.read_csv(spot_prices_file, index_col=0, parse_dates=True)

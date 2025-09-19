@@ -16,18 +16,34 @@ class OperationalState(Enum):
 
 # Transition matrix: rows = current state, columns = control
 # Values = next state
-NEXT_STATE_MATRIX = np.array([
-    # DO_NOTHING, RAMPING_UP, RAMPING_DOWN
-    [OperationalState.IDLE, OperationalState.RAMPING_UP, OperationalState.UNDEFINED],       # IDLE
-    [OperationalState.RUNNING, OperationalState.UNDEFINED, OperationalState.UNDEFINED],     # RAMPING_UP
-    [OperationalState.IDLE, OperationalState.UNDEFINED, OperationalState.UNDEFINED],  # RAMPING_DOWN
-    [OperationalState.RUNNING, OperationalState.UNDEFINED, OperationalState.RAMPING_DOWN],  # RUNNING
-])
+NEXT_STATE_MATRIX = np.array(
+    [
+        # DO_NOTHING, RAMPING_UP, RAMPING_DOWN
+        [
+            OperationalState.IDLE,
+            OperationalState.RAMPING_UP,
+            OperationalState.UNDEFINED,
+        ],  # IDLE
+        [
+            OperationalState.RUNNING,
+            OperationalState.UNDEFINED,
+            OperationalState.UNDEFINED,
+        ],  # RAMPING_UP
+        [
+            OperationalState.IDLE,
+            OperationalState.UNDEFINED,
+            OperationalState.UNDEFINED,
+        ],  # RAMPING_DOWN
+        [
+            OperationalState.RUNNING,
+            OperationalState.UNDEFINED,
+            OperationalState.RAMPING_DOWN,
+        ],  # RUNNING
+    ]
+)
 
-def get_next_state(
-    prev_states: pd.Series,
-    prev_controls: xr.DataArray
-) -> np.ndarray:
+
+def get_next_state(prev_states: pd.Series, prev_controls: xr.DataArray) -> np.ndarray:
     """
     Vectorized computation of next operational states.
 
@@ -47,7 +63,9 @@ def get_next_state(
     prev_states_int = prev_states.map(lambda s: s.value).to_numpy(dtype=int)
 
     # Convert prev_controls (DataArray of enums) to integers
-    prev_controls_int = np.array([ctrl.value for ctrl in prev_controls.values], dtype=int)
+    prev_controls_int = np.array(
+        [ctrl.value for ctrl in prev_controls.values], dtype=int
+    )
 
     next_states = NEXT_STATE_MATRIX[prev_states_int, prev_controls_int]
 

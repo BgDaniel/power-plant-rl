@@ -95,7 +95,7 @@ class ForwardCurve:
         if series is not None:
             result["series"] = {
                 "index": [str(d) for d in series.index],
-                "values": series.values.tolist()
+                "values": series.values.tolist(),
             }
 
         return result
@@ -210,12 +210,12 @@ class ForwardCurve:
 
 
 def generate_yearly_seasonal_curve(
-        as_of_date: pd.Timestamp,
-        start_date: pd.Timestamp,
-        end_date: pd.Timestamp,
-        winter_value: float,
-        summer_value: float,
-        name: Optional[str] = "SeasonalForwardCurve"
+    as_of_date: pd.Timestamp,
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp,
+    winter_value: float,
+    summer_value: float,
+    name: Optional[str] = "SeasonalForwardCurve",
 ) -> ForwardCurve:
     """
     Generate a yearly seasonal ForwardCurve with peak in summer and trough in winter.

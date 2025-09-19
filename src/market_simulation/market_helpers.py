@@ -56,6 +56,7 @@ def extract_month_ahead(fwds: xr.DataArray) -> pd.DataFrame:
 
     return pd.DataFrame(data, index=simulation_days, columns=simulation_paths)
 
+
 def yfr(start_date: pd.Timestamp, end_date: pd.Timestamp) -> float:
     """
     Compute year fraction between two dates using simple day count / 365.

@@ -14,7 +14,9 @@ from src.market_simulation.constants import (
     DELIVERY_START,
     FWD_CURVE,
 )
-from src.market_simulation.two_factor_model.two_factor_model_config import TwoFactorModelConfig
+from src.market_simulation.two_factor_model.two_factor_model_config import (
+    TwoFactorModelConfig,
+)
 
 
 class TwoFactorForwardModel:
@@ -26,11 +28,11 @@ class TwoFactorForwardModel:
     """
 
     def __init__(
-            self,
-            as_of_date: pd.Timestamp,
-            simulation_days: pd.DatetimeIndex,
-            params: Optional[TwoFactorModelConfig] = None,
-            config_path: Optional[str] = None,
+        self,
+        as_of_date: pd.Timestamp,
+        simulation_days: pd.DatetimeIndex,
+        params: Optional[TwoFactorModelConfig] = None,
+        config_path: Optional[str] = None,
     ) -> None:
         """
         Initialize the TwoFactorForwardModel.
@@ -111,20 +113,20 @@ class TwoFactorForwardModel:
         t = np.array([yfr(self.as_of_date, d) for d in self.simulation_days])
         cap_t = yfr(self.as_of_date, maturity_date)
 
-        var_s = (self.sigma_s ** 2 / (2 * self.kappa_s)) * (
-                np.exp(-2 * self.kappa_s * (cap_t - t))
-                - np.exp(-2 * self.kappa_s * (cap_t - t_0))
+        var_s = (self.sigma_s**2 / (2 * self.kappa_s)) * (
+            np.exp(-2 * self.kappa_s * (cap_t - t))
+            - np.exp(-2 * self.kappa_s * (cap_t - t_0))
         )
-        var_l = (self.sigma_l ** 2 / (2 * self.kappa_l)) * (
-                np.exp(-2 * self.kappa_l * (cap_t - t))
-                - np.exp(-2 * self.kappa_l * (cap_t - t_0))
+        var_l = (self.sigma_l**2 / (2 * self.kappa_l)) * (
+            np.exp(-2 * self.kappa_l * (cap_t - t))
+            - np.exp(-2 * self.kappa_l * (cap_t - t_0))
         )
         var_cross = (
-                            2 * self.rho * self.sigma_s * self.sigma_l / (self.kappa_s + self.kappa_l)
-                    ) * (
-                            np.exp(-(self.kappa_s + self.kappa_l) * (cap_t - t))
-                            - np.exp(-(self.kappa_s + self.kappa_l) * (cap_t - t_0))
-                    )
+            2 * self.rho * self.sigma_s * self.sigma_l / (self.kappa_s + self.kappa_l)
+        ) * (
+            np.exp(-(self.kappa_s + self.kappa_l) * (cap_t - t))
+            - np.exp(-(self.kappa_s + self.kappa_l) * (cap_t - t_0))
+        )
 
         total_var = var_s + var_l + var_cross
         total_var = np.where(self.simulation_days >= maturity_date, np.nan, total_var)
@@ -148,7 +150,7 @@ class TwoFactorForwardModel:
         vol_s = self.sigma_s * np.exp(-self.kappa_s * tau)
         vol_l = self.sigma_l * np.exp(-self.kappa_l * tau)
         vol_cross = 2 * self.rho * vol_s * vol_l
-        total_vol = np.sqrt(vol_s ** 2 + vol_l ** 2 + vol_cross)
+        total_vol = np.sqrt(vol_s**2 + vol_l**2 + vol_cross)
         total_vol = np.where(self.simulation_days >= maturity_date, np.nan, total_vol)
         return pd.Series(total_vol, index=self.simulation_days)
 
@@ -169,7 +171,7 @@ class TwoFactorForwardModel:
             Variance of F(t,T) for each simulation day.
         """
         log_vars = self.log_var(maturity_date)
-        return fwd_0 ** 2 * (np.exp(log_vars) - 1)
+        return fwd_0**2 * (np.exp(log_vars) - 1)
 
     def var_ou(self, sim_dates: pd.DatetimeIndex) -> pd.Series:
         """
@@ -186,7 +188,7 @@ class TwoFactorForwardModel:
             OU variance indexed by simulation dates.
         """
         t = np.array([yfr(self.as_of_date, d) for d in sim_dates])
-        var = (self.sigma ** 2 / (2 * self.beta)) * (1 - np.exp(-2 * self.beta * t))
+        var = (self.sigma**2 / (2 * self.beta)) * (1 - np.exp(-2 * self.beta * t))
         return pd.Series(var, index=sim_dates)
 
     def day_ahead_var(self, sim_dates: pd.DatetimeIndex) -> pd.Series:
@@ -208,7 +210,7 @@ class TwoFactorForwardModel:
         return pd.Series(variances, index=sim_dates)
 
     def _simulate_spot_prices(
-            self, month_ahead: xr.DataArray, n_sims: int
+        self, month_ahead: xr.DataArray, n_sims: int
     ) -> pd.DataFrame:
         """
         Simulate day-ahead prices by applying an OU process to month-ahead forwards.
@@ -230,7 +232,9 @@ class TwoFactorForwardModel:
         dw = np.random.normal(size=(n_steps - 1, n_sims)) * np.sqrt(DT)
 
         for t in range(1, n_steps):
-            x[t, :] = x[t - 1, :] - self.beta * x[t - 1, :] * DT + self.sigma * dw[t - 1, :]
+            x[t, :] = (
+                x[t - 1, :] - self.beta * x[t - 1, :] * DT + self.sigma * dw[t - 1, :]
+            )
 
         var_ou_array = self.var_ou(self.simulation_days).values[:, np.newaxis]
         day_ahead = np.exp(-var_ou_array / 2 + x)
@@ -239,10 +243,16 @@ class TwoFactorForwardModel:
 
     @staticmethod
     @njit
-    def _simulate_forward_loop(fwds_array: np.ndarray, mu_array: np.ndarray,
-                               sigma_s: float, kappa_s: float,
-                               sigma_l: float, kappa_l: float,
-                               dw: np.ndarray, tau_array: np.ndarray) -> np.ndarray:
+    def _simulate_forward_loop(
+        fwds_array: np.ndarray,
+        mu_array: np.ndarray,
+        sigma_s: float,
+        kappa_s: float,
+        sigma_l: float,
+        kappa_l: float,
+        dw: np.ndarray,
+        tau_array: np.ndarray,
+    ) -> np.ndarray:
         """
         Numba-accelerated forward simulation loop.
 
@@ -272,17 +282,17 @@ class TwoFactorForwardModel:
                 prev = fwds_array[t - 1, m, :]
                 dw_s, dw_l = dw[:, t - 1, 0], dw[:, t - 1, 1]
                 mu = mu_array[t, m]
-                dF = prev * (mu * DT + sigma_s * np.exp(-kappa_s * tau_array[t, m]) * dw_s
-                             + sigma_l * np.exp(-kappa_l * tau_array[t, m]) * dw_l)
+                dF = prev * (
+                    mu * DT
+                    + sigma_s * np.exp(-kappa_s * tau_array[t, m]) * dw_s
+                    + sigma_l * np.exp(-kappa_l * tau_array[t, m]) * dw_l
+                )
                 fwds_array[t, m, :] = prev + dF
         return fwds_array
 
     @cache_simulation
     def simulate(
-        self,
-        fwd_0: pd.Series,
-        n_sims: int,
-        **kwargs
+        self, fwd_0: pd.Series, n_sims: int, **kwargs
     ) -> Tuple[xr.DataArray, xr.DataArray, pd.DataFrame]:
         """
         Simulate forward curves using internal simulation days.
@@ -315,22 +325,35 @@ class TwoFactorForwardModel:
 
         # Precompute drift (mu) for all simulation days and maturities
         mu_df = pd.DataFrame(
-            {maturity: -0.5 * self.log_var(maturity) for maturity in delivery_start_dates},
-            index=self.simulation_days
+            {
+                maturity: -0.5 * self.log_var(maturity)
+                for maturity in delivery_start_dates
+            },
+            index=self.simulation_days,
         )
         mu_array = mu_df.values  # shape (n_steps, n_delivery_starts)
 
         # Precompute tau (time-to-maturity) array
-        tau_array = np.array([[yfr(self.simulation_days[t], maturity)
-                               for maturity in delivery_start_dates]
-                              for t in range(n_steps)])
+        tau_array = np.array(
+            [
+                [
+                    yfr(self.simulation_days[t], maturity)
+                    for maturity in delivery_start_dates
+                ]
+                for t in range(n_steps)
+            ]
+        )
 
         # Accelerated simulation loop using Numba
         fwds_array = self._simulate_forward_loop(
-            fwds_array, mu_array,
-            self.sigma_s, self.kappa_s,
-            self.sigma_l, self.kappa_l,
-            dw, tau_array
+            fwds_array,
+            mu_array,
+            self.sigma_s,
+            self.kappa_s,
+            self.sigma_l,
+            self.kappa_l,
+            dw,
+            tau_array,
         )
 
         # Convert to xarray DataArray
@@ -340,7 +363,9 @@ class TwoFactorForwardModel:
             DELIVERY_START: delivery_start_dates,
         }
         fwds = xr.DataArray(
-            np.transpose(fwds_array, (2, 0, 1)),  # shape (n_sims, n_steps, n_delivery_starts)
+            np.transpose(
+                fwds_array, (2, 0, 1)
+            ),  # shape (n_sims, n_steps, n_delivery_starts)
             dims=[SIMULATION_PATH, SIMULATION_DAY, DELIVERY_START],
             coords=coords,
             name=FWD_CURVE,
@@ -353,5 +378,3 @@ class TwoFactorForwardModel:
         spot_prices = self._simulate_spot_prices(month_ahead, n_sims)
 
         return fwds, month_ahead, spot_prices
-
-
