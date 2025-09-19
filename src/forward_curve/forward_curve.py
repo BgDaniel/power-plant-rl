@@ -26,7 +26,13 @@ class ForwardCurve:
     CONTANGO = "contango"
     BACKWARDATION = "backwardation"
 
-    def __init__(self, series: pd.Series, as_of_date: pd.Timestamp, name: str) -> None:
+    def __init__(
+        self,
+        series: pd.Series,
+        as_of_date: pd.Timestamp,
+        name: str,
+        freq: Optional[str] = "MS",  # default monthly start
+    ) -> None:
         """
         Initialize the ForwardCurve.
 
@@ -34,11 +40,25 @@ class ForwardCurve:
         ----------
         series : pd.Series
             Forward curve values indexed by dates.
-        start_date : pd.Timestamp
-            The start date of the forward curve.
+        as_of_date : pd.Timestamp
+            The reference date of the curve.
         name : str
             Name of the forward curve.
+        freq : str, optional
+            Frequency to resample the series. Defaults to 'MS' (month start).
         """
+        # Validate freq
+        self.freq = freq
+        if freq is not None:
+            try:
+                # Try creating a dummy date range to validate frequency
+                pd.date_range(start=series.index[0], periods=2, freq=freq)
+            except ValueError:
+                raise ValueError(f"Invalid freq '{freq}'. Must be a valid pandas offset alias.")
+
+            # Resample series if freq is provided
+            series = series.resample(freq).mean()
+
         self.series: pd.Series = series
         self.as_of_date: pd.Timestamp = as_of_date
         self.name: str = name

@@ -7,10 +7,8 @@ matplotlib.use('TkAgg')
 
 import matplotlib.pyplot as plt
 import numpy as np
-from typing import List
 
 from valuation.power_plant.power_plant import PowerPlant
-from valuation.regression.polynomial_regressor import KEY_R2
 
 
 class OpsPlot:
@@ -117,7 +115,6 @@ class OpsPlot:
         path_index : int or None, optional
             Index of the simulation path to overlay. If None, only aggregates are plotted.
         """
-        import matplotlib.dates as mdates
 
         lower1, lower2 = confidence_levels
 
@@ -157,7 +154,7 @@ class OpsPlot:
         ax1.legend(loc="upper left")
 
         # --- Row 2: Cashflows ---
-        cashflows = self.power_plant._optimal_cashflow  # shape (n_days, n_paths) or (n_paths, n_days)
+        cashflows = self.power_plant.optimal_cashflows  # shape (n_days, n_paths) or (n_paths, n_days)
 
         cash_mean = cashflows.mean(axis=1)
         cash_lower1 = np.percentile(cashflows, lower1 * 100, axis=1)
@@ -178,7 +175,7 @@ class OpsPlot:
         ax2.legend(loc="upper left")
 
         # --- Row 3: Spread ---
-        spread = self.power_plant._spread.loc[asset_days]
+        spread = self.power_plant.spreads.loc[asset_days]
 
         spread_mean = spread.mean(axis=1)
         spread_lower1 = np.percentile(spread, lower1 * 100, axis=1)

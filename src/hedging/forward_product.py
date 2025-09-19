@@ -1,56 +1,68 @@
 import pandas as pd
+import numpy as np
 from typing import Optional
 
 
-class ForwardProduct:
+class MonthlyForward:
     def __init__(
         self,
-        name: str,
         delivery_start: pd.Timestamp,
-        delivery_end: pd.Timestamp,
-        prices: pd.Series,
-        strike: Optional[float] = None,
-        nominal: float = 1.0,
+        strike: float,
+        nominal: float,
+        long: bool = True
     ):
         """
-        Represents a forward contract.
+        Represents a monthly forward contract.
 
         Args:
-            name: Name of the forward product.
-            delivery_start: Start of the delivery period.
-            delivery_end: End of the delivery period.
-            prices: Forward prices indexed by date.
-            strike: Strike price of the forward (default = first price).
+            delivery_start: Start of the delivery period (must be the first day of a month).
+            strike: Strike price of the forward.
             nominal: Contract size.
+            long: True for long position (default), False for short position.
         """
-        self.name: str = name
-        self.start: pd.Timestamp = pd.Timestamp(delivery_start)
-        self.end: pd.Timestamp = pd.Timestamp(delivery_end)
-        self.prices: pd.Series = prices.sort_index()
+        # Ensure delivery_start is a Timestamp
+        self.start_start = delivery_start
+
+        # Validate that delivery_start is the 1st of the month
+        if self.start.day != 1:
+            raise ValueError("delivery_start must be the first day of a month")
+
+        # Infer name as YYYY_MM
+        self.name: str = self.start.strftime("%Y_%m")
+
+        # Infer delivery_end as the last day of that month
+        self.delivery_end: pd.Timestamp = self.start + pd.offsets.MonthEnd(0)
+
+        self.delivery_days = pd.date_range(start=self.delivery_start, end=self.delivery_end, freq='D')
+
+        # Infer maturity as the day before start
+        self.maturity: pd.Timestamp = self.delivery_start - pd.Timedelta(days=1)
+
+        # Store contract parameters
         self.nominal: float = nominal
-        self.strike: float = strike if strike is not None else prices.iloc[0]
+        self.strike: float = strike
+        self.long: bool = long
 
-    def covers(self, date: pd.Timestamp) -> bool:
-        """
-        Check if this forward covers a given date.
+        # Internal multiplier (+1 for long, -1 for short)
+        self._direction: int = 1 if long else -1
 
-        Args:
-            date: The date to check.
-
-        Returns:
-            True if the forward covers the date, False otherwise.
-        """
-        date = pd.Timestamp(date)
-        return self.start <= date <= self.end
-
-    def get_mark_to_market(self, current_price: float) -> float:
+    def value(self, current_price: float | np.ndarray | pd.Series) -> float | np.ndarray | pd.Series:
         """
         Compute mark-to-market value relative to the strike.
 
         Args:
-            current_price: The current price of the forward.
+            current_price: Current forward price(s) (scalar, numpy array, or pandas Series).
 
         Returns:
-            Nominal times the difference between current price and strike.
+            Mark-to-market value(s) = ± nominal * (current_price - strike).
         """
-        return self.nominal * (current_price - self.strike)
+        return self._direction * self.nominal * (current_price - self.strike)
+
+    def cashflow(self, spots: pd.Series | pd.DataFrame) -> pd.Series:
+        return self.nominal * (spots - self.strike)
+
+    def __repr__(self) -> str:
+        pos = "Long" if self.long else "Short"
+        return (f"MonthlyForward(name={self.name}, start={self.start.date()}, "
+                f"end={self.end.date()}, strike={self.strike}, nominal={self.nominal}, "
+                f"position={pos})")

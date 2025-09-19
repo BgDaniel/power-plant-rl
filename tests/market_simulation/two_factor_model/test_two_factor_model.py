@@ -61,7 +61,7 @@ def example_model_and_data() -> (
 
     fwds, month_aheads, spots = two_factor_model.simulate(fwd_0=fwd_0, n_sims=n_sims)
 
-    return two_factor_model, fwd_0, simulation_days, fwds, month_aheads, spots
+    return two_factor_model, fwd_0_monthly, simulation_days, fwds, month_aheads, spots
 
 
 class TestTwoFactorForwardModel:

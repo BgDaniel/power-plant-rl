@@ -12,6 +12,8 @@ KEY_R2 = "r2"
 KEY_RESIDUALS = "residuals"
 KEY_CONDITION_NUMBER = "condition_number"
 
+EPS = 1e-5
+
 
 class PolynomialRegression:
     """
@@ -95,6 +97,24 @@ class PolynomialRegression:
             - condition_number: Condition number of the design matrix.
         """
         # Create polynomial features
+        # -------------------------
+        # Check for degenerate case: all features almost constant
+        # -------------------------
+        x_range = self.x.max(axis=0) - self.x.min(axis=0)
+        if np.all(x_range < EPS):
+            # All features are (almost) constant -> predict mean of y
+            y_pred = np.full_like(self.y, np.mean(self.y))
+            residuals = self.y - y_pred
+            return {
+                KEY_PREDICTED: y_pred,
+                KEY_R2: 0.0,
+                KEY_RESIDUALS: residuals,
+                KEY_CONDITION_NUMBER: np.nan,
+            }
+
+        # -------------------------
+        # Normal polynomial regression
+        # -------------------------
         if self.poly_type == self.POLY_STANDARD:
             poly = PolynomialFeatures(degree=self.degree)
             self.x_poly = poly.fit_transform(self.x)

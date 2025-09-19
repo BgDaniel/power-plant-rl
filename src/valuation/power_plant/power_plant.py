@@ -5,7 +5,7 @@ import pandas as pd
 import logging
 from tqdm import tqdm
 import time
-from typing import Tuple
+
 
 from forward_curve.forward_curve import ForwardCurve
 from market_simulation.constants import DELIVERY_START, SIMULATION_DAY
@@ -16,11 +16,10 @@ from valuation.power_plant.power_plant_config import (
     PowerPlantConfigLoader,
     PowerPlantConfig,
 )
-from valuation.regression.polynomial_regressor import (
+from regression.polynomial_regressor import (
     PolynomialRegression,
     KEY_PREDICTED,
     KEY_R2,
-    KEY_CONDITION_NUMBER,
 )
 
 
@@ -42,6 +41,9 @@ CASHFLOWS = "cashflows"
 REGRESSED_VALUE = "regressed_value"
 REGRESSION_RESULTS = "regression_results"
 
+POWER = 'POWER'
+COAL = 'COAL'
+
 
 class PowerPlant:
     """
@@ -57,7 +59,7 @@ class PowerPlant:
     n_steps : int
         Number of time steps in the simulation (= len(simulation_days)).
 
-    _cashflows : xr.DataArray
+    cashflows : xr.DataArray
         Cashflows for each (day, simulation path, operational state).
         Shape: (n_steps, n_sims, 4).
     value : xr.DataArray
@@ -146,7 +148,7 @@ class PowerPlant:
         # -----------------------
         # Cashflows
         # -----------------------
-        self._cashflows: xr.DataArray = xr.DataArray(
+        self.cashflows: xr.DataArray = xr.DataArray(
             np.zeros((self.n_steps, self.n_sims, len(self.operational_states))),
             dims=[DIM_SIMULATION_DAY, DIM_SIMULATION_PATH, DIM_OPERATIONAL_STATE],
             coords={
@@ -212,14 +214,14 @@ class PowerPlant:
         )
 
         # Compute spread: power - efficiency * coal
-        self._spread: pd.DataFrame = spots_power.sub(self.efficiency * spots_coal)
+        self.spreads: pd.DataFrame = spots_power.sub(self.efficiency * spots_coal)
 
         self._optimal_value = pd.DataFrame(np.zeros((self.n_steps, self.n_sims)),
                                            index=self.asset_days, columns=range(self.n_sims))
         self._optimal_state = pd.DataFrame(np.full((self.n_steps, self.n_sims),
                                                    OperationalState.IDLE, dtype=object), index=self.asset_days,
                                            columns=range(self.n_sims))
-        self._optimal_cashflow = pd.DataFrame(np.zeros((self.n_steps, self.n_sims)), index=self.asset_days,
+        self.optimal_cashflows = pd.DataFrame(np.zeros((self.n_steps, self.n_sims)), index=self.asset_days,
                                               columns=range(self.n_sims))
 
     def _initialize_terminal_state(self) -> None:
@@ -228,24 +230,24 @@ class PowerPlant:
         Sets cashflows and values for the last day across all operational states.
         """
         last_day = self.asset_days[-1]
-        spread_last = self._spread.loc[last_day]
+        spread_last = self.spreads.loc[last_day]
 
-        self._cashflows.loc[
+        self.cashflows.loc[
             {DIM_SIMULATION_DAY: last_day, DIM_OPERATIONAL_STATE: OperationalState.IDLE}
         ] = -self.idle_costs
-        self._cashflows.loc[
+        self.cashflows.loc[
             {
                 DIM_SIMULATION_DAY: last_day,
                 DIM_OPERATIONAL_STATE: OperationalState.RAMPING_UP,
             }
         ] = -self.ramping_up_costs
-        self._cashflows.loc[
+        self.cashflows.loc[
             {
                 DIM_SIMULATION_DAY: last_day,
                 DIM_OPERATIONAL_STATE: OperationalState.RAMPING_DOWN,
             }
         ] = -self.ramping_down_costs
-        self._cashflows.loc[
+        self.cashflows.loc[
             {
                 DIM_SIMULATION_DAY: last_day,
                 DIM_OPERATIONAL_STATE: OperationalState.RUNNING,
@@ -254,7 +256,7 @@ class PowerPlant:
             -self.operation_costs + self.efficiency * spread_last.values
         )
 
-    def _optimize(self, simulation_day: pd.Timestamp) -> None:
+    def _optimize(self, asset_day: pd.Timestamp) -> None:
         """
         Perform backward induction optimization for a single simulation day.
         It updates the cashflows, values, and optimal control decisions for each
@@ -262,154 +264,137 @@ class PowerPlant:
 
         Parameters
         ----------
-        simulation_day : pd.Timestamp
+        asset_day : pd.Timestamp
             The simulation day to optimize.
         """
-        first_day = self.asset_days[0]
-
-        if simulation_day == first_day:
-            # Special case: first day, no regression
-            next_day = self.asset_days[1]
-            for state in OperationalState:
-                self._value_0 = (
-                    self.values.sel(simulation_day=next_day, operational_state=state)
-                    .mean(dim="simulation_path")
-                    .values
-                )
-                # Broadcast the mean to all simulation paths
-                self._regressed_values.loc[
-                    dict(simulation_day=simulation_day, operational_state=state)
-                ] = np.full(self.n_sims, self._value_0)
-        else:
-            # Normal case: regress for all states
-            for state in OperationalState:
-                self._regressed_values.loc[
-                    dict(simulation_day=simulation_day, operational_state=state)
-                ] = self._regress(simulation_day, state)
+        for state in OperationalState:
+            self._regressed_values.loc[
+                dict(simulation_day=asset_day, operational_state=state)
+            ] = self._regress(asset_day, state)
 
         # Optimize each state separately
-        self._optimize_idle(simulation_day)
-        self._optimize_ramping_up(simulation_day)
-        self._optimize_ramping_down(simulation_day)
-        self._optimize_running(simulation_day)
+        self._optimize_idle(asset_day)
+        self._optimize_ramping_up(asset_day)
+        self._optimize_ramping_down(asset_day)
+        self._optimize_running(asset_day)
 
-    def _optimize_idle(self, simulation_day: pd.Timestamp) -> None:
+    def _optimize_idle(self, asset_day: pd.Timestamp) -> None:
         """
         Optimize the idle state for a single simulation day.
 
         Parameters
         ----------
-        simulation_day : pd.Timestamp
+        asset_day : pd.Timestamp
             The simulation day to optimize.
         """
         idle = OperationalState.IDLE
         ramp_up = OperationalState.RAMPING_UP
 
         cont_val = self._regressed_values.loc[
-            dict(simulation_day=simulation_day, operational_state=idle)
+            dict(simulation_day=asset_day, operational_state=idle)
         ]
         exer_val = self._regressed_values.loc[
-            dict(simulation_day=simulation_day, operational_state=ramp_up)
+            dict(simulation_day=asset_day, operational_state=ramp_up)
         ]
 
-        self._cashflows.loc[
-            dict(simulation_day=simulation_day, operational_state=idle)
+        self.cashflows.loc[
+            dict(simulation_day=asset_day, operational_state=idle)
         ] = -self.idle_costs
-        self.values.loc[dict(simulation_day=simulation_day, operational_state=idle)] = (
+        self.values.loc[dict(simulation_day=asset_day, operational_state=idle)] = (
             -self.idle_costs + np.maximum(cont_val, exer_val)
         )
         self._optimal_control.loc[
-            dict(simulation_day=simulation_day, operational_state=idle)
+            dict(simulation_day=asset_day, operational_state=idle)
         ] = np.where(
             cont_val > exer_val, OptimalControl.DO_NOTHING, OptimalControl.RAMPING_UP
         )
 
-    def _optimize_ramping_up(self, simulation_day: pd.Timestamp) -> None:
+    def _optimize_ramping_up(self, asset_day: pd.Timestamp) -> None:
         """
         Optimize the ramping-up state for a single simulation day.
 
         Parameters
         ----------
-        simulation_day : pd.Timestamp
+        asset_day : pd.Timestamp
             The simulation day to optimize.
         """
         ramp_up = OperationalState.RAMPING_UP
         running = OperationalState.RUNNING
 
-        self._cashflows.loc[
-            dict(simulation_day=simulation_day, operational_state=ramp_up)
+        self.cashflows.loc[
+            dict(simulation_day=asset_day, operational_state=ramp_up)
         ] = -self.ramping_up_costs
         self.values.loc[
-            dict(simulation_day=simulation_day, operational_state=ramp_up)
+            dict(simulation_day=asset_day, operational_state=ramp_up)
         ] = (
             -self.ramping_up_costs
             + self._regressed_values.loc[
-                dict(simulation_day=simulation_day, operational_state=running)
+                dict(simulation_day=asset_day, operational_state=running)
             ]
         )
         # No control decision to be made for ramping up
 
-    def _optimize_ramping_down(self, simulation_day: pd.Timestamp) -> None:
+    def _optimize_ramping_down(self, asset_day: pd.Timestamp) -> None:
         """
         Optimize the ramping-down state for a single simulation day.
 
         Parameters
         ----------
-        simulation_day : pd.Timestamp
+        asset_day : pd.Timestamp
             The simulation day to optimize.
         """
         ramp_down = OperationalState.RAMPING_DOWN
         idle = OperationalState.IDLE
 
-        self._cashflows.loc[
-            dict(simulation_day=simulation_day, operational_state=ramp_down)
+        self.cashflows.loc[
+            dict(simulation_day=asset_day, operational_state=ramp_down)
         ] = -self.ramping_down_costs
         self.values.loc[
-            dict(simulation_day=simulation_day, operational_state=ramp_down)
+            dict(simulation_day=asset_day, operational_state=ramp_down)
         ] = (
             -self.ramping_down_costs
             + self._regressed_values.loc[
-                dict(simulation_day=simulation_day, operational_state=idle)
+                dict(simulation_day=asset_day, operational_state=idle)
             ]
         )
         # No control decision to be made for ramping down
 
-    def _optimize_running(self, simulation_day: pd.Timestamp) -> None:
+    def _optimize_running(self, asset_day: pd.Timestamp) -> None:
         """
         Optimize the running state for a single simulation day.
 
         Parameters
         ----------
-        simulation_day : pd.Timestamp
+        asset_day : pd.Timestamp
             The simulation day to optimize.
         """
         running = OperationalState.RUNNING
         ramp_down = OperationalState.RAMPING_DOWN
 
         cont_val = self._regressed_values.loc[
-            dict(simulation_day=simulation_day, operational_state=running)
+            dict(simulation_day=asset_day, operational_state=running)
         ]
         exer_val = self._regressed_values.loc[
-            dict(simulation_day=simulation_day, operational_state=ramp_down)
+            dict(simulation_day=asset_day, operational_state=ramp_down)
         ]
 
-        self._cashflows.loc[
-            dict(simulation_day=simulation_day, operational_state=running)
-        ] = (-self.operation_costs + self.efficiency * self._spread.loc[simulation_day])
+        self.cashflows.loc[
+            dict(simulation_day=asset_day, operational_state=running)
+        ] = (-self.operation_costs + self.efficiency * self.spreads.loc[asset_day])
         self.values.loc[
-            dict(simulation_day=simulation_day, operational_state=running)
+            dict(simulation_day=asset_day, operational_state=running)
         ] = (
             -self.operation_costs
-            + self.efficiency * self._spread.loc[simulation_day]
+            + self.efficiency * self.spreads.loc[asset_day]
             + np.maximum(cont_val, exer_val)
         )
         self._optimal_control.loc[
-            dict(simulation_day=simulation_day, operational_state=running)
+            dict(simulation_day=asset_day, operational_state=running)
         ] = np.where(
             cont_val > exer_val, OptimalControl.DO_NOTHING, OptimalControl.RAMPING_DOWN
         )
 
-    def _extract_front_months(self, fwds: xr.DataArray, simulation_day: pd.Timestamp) -> xr.DataArray:
+    def _get_front_months(self, fwds: xr.DataArray, asset_day: pd.Timestamp) -> xr.DataArray:
         """
         Extract front month forward prices where delivery start dates lie between the given
         simulation_day and the end of asset_days.
@@ -418,7 +403,7 @@ class PowerPlant:
         ----------
         fwds_power : xr.DataArray
             Forward curve array with dims (SIMULATION_PATH, SIMULATION_DAY, DELIVERY_START).
-        simulation_day : pd.Timestamp
+        asset_day : pd.Timestamp
             The current simulation day.
 
         Returns
@@ -427,14 +412,14 @@ class PowerPlant:
             Filtered forward prices with restricted DELIVERY_START.
         """
         # Define interval
-        start = pd.Timestamp(simulation_day)
+        start = pd.Timestamp(asset_day)
         end = self.asset_days[-1]  # last asset day
 
-        return fwds.sel({DELIVERY_START: slice(start, end), SIMULATION_DAY: simulation_day})
+        return fwds.sel({DELIVERY_START: slice(start, end), SIMULATION_DAY: asset_day})
 
     def _regress(
         self,
-        simulation_day: pd.Timestamp,
+        asset_day: pd.Timestamp,
         state: OperationalState,
         r2_threshold: float = 0.0,
     ) -> np.ndarray:
@@ -444,7 +429,7 @@ class PowerPlant:
 
         Parameters
         ----------
-        simulation_day : pd.Timestamp
+        asset_day : pd.Timestamp
             The simulation day to perform regression on.
         state : OperationalState
             The operational state (IDLE, RAMPING_UP, RAMPING_DOWN, RUNNING).
@@ -463,11 +448,11 @@ class PowerPlant:
             If the R² score of the regression is below the specified threshold.
         """
         # Extract day-ahead power and coal prices for the given day
-        spots_power = self.spots_power.loc[simulation_day].values
-        spots_coal = self.spots_coal.loc[simulation_day].values
+        spots_power = self.spots_power.loc[asset_day].values
+        spots_coal = self.spots_coal.loc[asset_day].values
 
-        fwds_power_front_months = self._extract_front_months(self.fwds_power, simulation_day).values
-        fwds_coal_front_months = self._extract_front_months(self.fwds_coal, simulation_day).values
+        fwds_power_front_months = self._get_front_months(self.fwds_power, asset_day).values
+        fwds_coal_front_months = self._get_front_months(self.fwds_coal, asset_day).values
 
         # Stack features
         x = np.hstack([spots_power.reshape(-1, 1), spots_coal.reshape(-1, 1),
@@ -475,7 +460,7 @@ class PowerPlant:
 
         # Extract target values: optimal value for the next day
         y = (
-            self.values.sel(simulation_day=simulation_day + pd.Timedelta(days=1))
+            self.values.sel(simulation_day=asset_day + pd.Timedelta(days=1))
             .sel(operational_state=state)
             .values
         )
@@ -497,17 +482,17 @@ class PowerPlant:
         if r2_score < r2_threshold:
             raise ValueError(
                 f"Regression R²={r2_score:.4f} below threshold {r2_threshold} "
-                f"for state {state.name} on {simulation_day.date()}"
+                f"for state {state.name} on {asset_day.date()}"
             )
 
         # Store regression results in the class xarray field
         self._regressed_values.loc[
-            dict(simulation_day=simulation_day, operational_state=state)
+            dict(simulation_day=asset_day, operational_state=state)
         ] = regressed_value
 
         # Store regression results in the class xarray field
         self._r2_scores.loc[
-            dict(simulation_day=simulation_day, operational_state=state)
+            dict(simulation_day=asset_day, operational_state=state)
         ] = r2_score
 
         return regressed_value
@@ -530,7 +515,7 @@ class PowerPlant:
             simulation_day=first_day,
             operational_state=self._initial_state
         ).values
-        self._optimal_cashflow.loc[first_day, :] = self._cashflows.sel(
+        self.optimal_cashflows.loc[first_day, :] = self.cashflows.sel(
             simulation_day=first_day,
             operational_state=self._initial_state
         ).values
@@ -562,7 +547,7 @@ class PowerPlant:
                 simulation_day=current_day,
                 operational_state=current_optimal_states
             ).values
-            self._optimal_cashflow.loc[current_day, :] = self._cashflows.sel(
+            self.optimal_cashflows.loc[current_day, :] = self.cashflows.sel(
                 simulation_day=current_day,
                 operational_state=current_optimal_states
             ).values
@@ -598,13 +583,13 @@ class PowerPlant:
 
         self._initialize_terminal_state()
 
-        for simulation_day in tqdm(
+        for asset_day in tqdm(
             reversed(self.asset_days[:-1]),
             total=len(self.asset_days) - 1,
             desc="Optimizing simulation days",
             unit="day",
         ):
-            self._optimize(simulation_day)
+            self._optimize(asset_day)
 
         self.determine_optimal_dispatch()
 
