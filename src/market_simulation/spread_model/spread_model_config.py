@@ -86,9 +86,7 @@ class SpreadModelConfig:
             params: Dict[str, Any] = json.load(f)
 
         # Check required keys
-        missing_keys = [
-            k for k in [POWER, COAL, RHO_LONG] if k not in params
-        ]
+        missing_keys = [k for k in [POWER, COAL, RHO_LONG] if k not in params]
         if missing_keys:
             raise ValueError(f"Missing keys in SpreadModel JSON config: {missing_keys}")
 

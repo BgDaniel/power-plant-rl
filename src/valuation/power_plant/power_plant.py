@@ -41,8 +41,8 @@ CASHFLOWS = "cashflows"
 REGRESSED_VALUE = "regressed_value"
 REGRESSION_RESULTS = "regression_results"
 
-POWER = 'POWER'
-COAL = 'COAL'
+POWER = "POWER"
+COAL = "COAL"
 
 
 class PowerPlant:
@@ -214,13 +214,21 @@ class PowerPlant:
         # Compute spread: power - efficiency * coal
         self.spreads: pd.DataFrame = spots_power.sub(self.efficiency * spots_coal)
 
-        self._optimal_value = pd.DataFrame(np.zeros((self.n_steps, self.n_sims)),
-                                           index=self.asset_days, columns=range(self.n_sims))
-        self._optimal_state = pd.DataFrame(np.full((self.n_steps, self.n_sims),
-                                                   OperationalState.IDLE, dtype=object), index=self.asset_days,
-                                           columns=range(self.n_sims))
-        self.optimal_cashflows = pd.DataFrame(np.zeros((self.n_steps, self.n_sims)), index=self.asset_days,
-                                              columns=range(self.n_sims))
+        self._optimal_value = pd.DataFrame(
+            np.zeros((self.n_steps, self.n_sims)),
+            index=self.asset_days,
+            columns=range(self.n_sims),
+        )
+        self._optimal_state = pd.DataFrame(
+            np.full((self.n_steps, self.n_sims), OperationalState.IDLE, dtype=object),
+            index=self.asset_days,
+            columns=range(self.n_sims),
+        )
+        self.optimal_cashflows = pd.DataFrame(
+            np.zeros((self.n_steps, self.n_sims)),
+            index=self.asset_days,
+            columns=range(self.n_sims),
+        )
 
     def _initialize_terminal_state(self) -> None:
         """
@@ -295,9 +303,9 @@ class PowerPlant:
             dict(simulation_day=asset_day, operational_state=ramp_up)
         ]
 
-        self.cashflows.loc[
-            dict(simulation_day=asset_day, operational_state=idle)
-        ] = -self.idle_costs
+        self.cashflows.loc[dict(simulation_day=asset_day, operational_state=idle)] = (
+            -self.idle_costs
+        )
         self.values.loc[dict(simulation_day=asset_day, operational_state=idle)] = (
             -self.idle_costs + np.maximum(cont_val, exer_val)
         )
@@ -322,9 +330,7 @@ class PowerPlant:
         self.cashflows.loc[
             dict(simulation_day=asset_day, operational_state=ramp_up)
         ] = -self.ramping_up_costs
-        self.values.loc[
-            dict(simulation_day=asset_day, operational_state=ramp_up)
-        ] = (
+        self.values.loc[dict(simulation_day=asset_day, operational_state=ramp_up)] = (
             -self.ramping_up_costs
             + self._regressed_values.loc[
                 dict(simulation_day=asset_day, operational_state=running)
@@ -347,9 +353,7 @@ class PowerPlant:
         self.cashflows.loc[
             dict(simulation_day=asset_day, operational_state=ramp_down)
         ] = -self.ramping_down_costs
-        self.values.loc[
-            dict(simulation_day=asset_day, operational_state=ramp_down)
-        ] = (
+        self.values.loc[dict(simulation_day=asset_day, operational_state=ramp_down)] = (
             -self.ramping_down_costs
             + self._regressed_values.loc[
                 dict(simulation_day=asset_day, operational_state=idle)
@@ -379,9 +383,7 @@ class PowerPlant:
         self.cashflows.loc[
             dict(simulation_day=asset_day, operational_state=running)
         ] = (-self.operation_costs + self.efficiency * self.spreads.loc[asset_day])
-        self.values.loc[
-            dict(simulation_day=asset_day, operational_state=running)
-        ] = (
+        self.values.loc[dict(simulation_day=asset_day, operational_state=running)] = (
             -self.operation_costs
             + self.efficiency * self.spreads.loc[asset_day]
             + np.maximum(cont_val, exer_val)
@@ -451,8 +453,12 @@ class PowerPlant:
         spots_power = self.spots_power.loc[asset_day].values
         spots_coal = self.spots_coal.loc[asset_day].values
 
-        fwds_power_front_months = self._get_front_months(self.fwds_power, asset_day).values
-        fwds_coal_front_months = self._get_front_months(self.fwds_coal, asset_day).values
+        fwds_power_front_months = self._get_front_months(
+            self.fwds_power, asset_day
+        ).values
+        fwds_coal_front_months = self._get_front_months(
+            self.fwds_coal, asset_day
+        ).values
 
         # Stack features
         x = np.hstack(
@@ -497,9 +503,9 @@ class PowerPlant:
         ] = regressed_value
 
         # Store regression results in the class xarray field
-        self._r2_scores.loc[
-            dict(simulation_day=asset_day, operational_state=state)
-        ] = r2_score
+        self._r2_scores.loc[dict(simulation_day=asset_day, operational_state=state)] = (
+            r2_score
+        )
 
         return regressed_value
 
@@ -521,8 +527,7 @@ class PowerPlant:
             simulation_day=first_day, operational_state=self._initial_state
         ).values
         self.optimal_cashflows.loc[first_day, :] = self.cashflows.sel(
-            simulation_day=first_day,
-            operational_state=self._initial_state
+            simulation_day=first_day, operational_state=self._initial_state
         ).values
 
         # Remaining days
@@ -537,7 +542,9 @@ class PowerPlant:
             # Previous optimal control as DataArray
             prev_optimal_control = self._optimal_control.sel(
                 simulation_day=prev_day,
-                operational_state=xr.DataArray(prev_optimal_states, dims=DIM_SIMULATION_PATH)
+                operational_state=xr.DataArray(
+                    prev_optimal_states, dims=DIM_SIMULATION_PATH
+                ),
             )
 
             # Vectorized next state computation
@@ -558,8 +565,7 @@ class PowerPlant:
                 simulation_day=current_day, operational_state=current_optimal_states
             ).values
             self.optimal_cashflows.loc[current_day, :] = self.cashflows.sel(
-                simulation_day=current_day,
-                operational_state=current_optimal_states
+                simulation_day=current_day, operational_state=current_optimal_states
             ).values
 
         total_elapsed = time.time() - start_time

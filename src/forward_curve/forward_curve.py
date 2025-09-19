@@ -54,7 +54,9 @@ class ForwardCurve:
                 # Try creating a dummy date range to validate frequency
                 pd.date_range(start=series.index[0], periods=2, freq=freq)
             except ValueError:
-                raise ValueError(f"Invalid freq '{freq}'. Must be a valid pandas offset alias.")
+                raise ValueError(
+                    f"Invalid freq '{freq}'. Must be a valid pandas offset alias."
+                )
 
             # Resample series if freq is provided
             series = series.resample(freq).mean()

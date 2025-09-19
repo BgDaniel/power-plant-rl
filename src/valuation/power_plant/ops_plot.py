@@ -179,14 +179,19 @@ class OpsPlot:
         ax1.grid(True)
         ax1.legend(
             loc="upper center",  # Position relative to bbox_to_anchor
-            bbox_to_anchor=(0.5, -0.15),  # x=0.5 centers horizontally, y=-0.15 moves below the axes
+            bbox_to_anchor=(
+                0.5,
+                -0.15,
+            ),  # x=0.5 centers horizontally, y=-0.15 moves below the axes
             fontsize="small",
             markerscale=0.4,
-            ncol=4  # Optional: spread legend items across multiple columns
+            ncol=4,  # Optional: spread legend items across multiple columns
         )
 
         # --- Row 2: Cashflows ---
-        cashflows = self.power_plant.optimal_cashflows  # shape (n_days, n_paths) or (n_paths, n_days)
+        cashflows = (
+            self.power_plant.optimal_cashflows
+        )  # shape (n_days, n_paths) or (n_paths, n_days)
 
         cash_mean = cashflows.mean(axis=1)
         cash_lower1 = np.percentile(cashflows, lower1 * 100, axis=1)
@@ -228,10 +233,13 @@ class OpsPlot:
         ax2.grid(True)
         ax2.legend(
             loc="upper center",  # Position relative to bbox_to_anchor
-            bbox_to_anchor=(0.5, -0.15),  # x=0.5 centers horizontally, y=-0.15 moves below the axes
+            bbox_to_anchor=(
+                0.5,
+                -0.15,
+            ),  # x=0.5 centers horizontally, y=-0.15 moves below the axes
             fontsize="small",
             markerscale=0.4,
-            ncol=4  # Optional: spread legend items across multiple columns
+            ncol=4,  # Optional: spread legend items across multiple columns
         )
 
         # --- Row 3: Spread ---
@@ -313,10 +321,13 @@ class OpsPlot:
         ax3.grid(True)
         ax3.legend(
             loc="upper center",  # Position relative to bbox_to_anchor
-            bbox_to_anchor=(0.5, -0.15),  # x=0.5 centers horizontally, y=-0.15 moves below the axes
+            bbox_to_anchor=(
+                0.5,
+                -0.15,
+            ),  # x=0.5 centers horizontally, y=-0.15 moves below the axes
             fontsize="small",
             markerscale=0.4,
-            ncol=6  # Optional: spread legend items across multiple columns
+            ncol=6,  # Optional: spread legend items across multiple columns
         )
 
         # --- Row 4: State fraction heatmap ---
