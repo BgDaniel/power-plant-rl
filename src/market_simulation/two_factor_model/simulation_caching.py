@@ -7,6 +7,7 @@ import xarray as xr
 import pandas as pd
 from functools import wraps
 
+from market_simulation.constants import SIMULATION_DAY, DELIVERY_START
 
 # File name constants
 FWDS_FILE = "fwds.nc"
@@ -73,13 +74,23 @@ def cache_simulation(func):
 
         # Try loading cache
         if (
-            os.path.exists(fwds_file)
-            and os.path.exists(month_ahead_file)
-            and os.path.exists(spot_prices_file)
+                os.path.exists(fwds_file)
+                and os.path.exists(month_ahead_file)
+                and os.path.exists(spot_prices_file)
         ):
+            # Load data
             fwds = xr.load_dataarray(fwds_file)
             month_ahead = pd.read_csv(month_ahead_file, index_col=0, parse_dates=True)
             spot_prices = pd.read_csv(spot_prices_file, index_col=0, parse_dates=True)
+
+            # Ensure all time coordinates are pandas Timestamps
+            if SIMULATION_DAY in fwds.dims:
+                fwds = fwds.assign_coords({SIMULATION_DAY: pd.to_datetime(fwds.coords[SIMULATION_DAY].values)})
+            if DELIVERY_START in fwds.dims:
+                fwds = fwds.assign_coords({DELIVERY_START: pd.to_datetime(fwds.coords[DELIVERY_START].values)})
+            month_ahead.index = pd.to_datetime(month_ahead.index)
+            spot_prices.index = pd.to_datetime(spot_prices.index)
+
             print(f"[CACHE] Loaded cached simulation from {run_folder}")
             return fwds, month_ahead, spot_prices
 

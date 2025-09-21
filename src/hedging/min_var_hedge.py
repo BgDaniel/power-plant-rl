@@ -1,5 +1,4 @@
 import os
-import pickle
 import tempfile
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -7,14 +6,15 @@ import numpy as np
 import xarray as xr
 from tqdm import tqdm
 
-from forward_curve.forward_curve import generate_yearly_seasonal_curve, ForwardCurve
+from regression.min_var_regression import MinVarPolynomialRegression
 from market_simulation.constants import SIMULATION_PATH, SIMULATION_DAY, DELIVERY_START
-from market_simulation.spread_model.spread_model import SpreadModel
 from market_simulation.two_factor_model.simulation_caching import CACHE_FOLDER_ENV
-from regression.polynomial_regressor import PolynomialRegression, KEY_PREDICTED, KEY_R2
-from valuation.operations_states import OperationalState
+from regression.polynomial_base_builder import PolynomialBasisBuilder
+
 from valuation.power_plant.power_plant import PowerPlant
 from valuation.power_plant.power_plant import POWER, COAL
+
+from regression.regression_helpers import KEY_R2, KEY_PREDICTED
 
 
 DELTA_POWER = "DELTA_POWER"
@@ -33,7 +33,7 @@ class MinVarHedge:
         spots_coal: pd.DataFrame,  # (sim_days, n_sims)
         fwds_power: xr.DataArray,  # (n_sims, n_days, n_delivery_months)
         fwds_coal: xr.DataArray,  # (n_sims, n_days, n_delivery_months)
-        polynomial_type: str = PolynomialRegression.POLY_LEGENDRE,
+        polynomial_type: str = PolynomialBasisBuilder.POLY_LEGENDRE,
         polynomial_degree: int = 4,
     ):
         self._n_sims = n_sims
@@ -196,14 +196,39 @@ class MinVarHedge:
             )
 
     def _hedge_front_month(
-        self,
-        asset_day: pd.Timestamp,
-        asset: str,
-        delivery_start: str,
-        front_months_fwds: pd.DataFrame,
-        r2_threshold=0.0,
-    ):
+            self,
+            asset_day: pd.Timestamp,
+            asset: str,
+            delivery_start: str,
+            front_months_fwds: pd.DataFrame,
+            r2_threshold: float = 0.0
+    ) -> np.ndarray:
+        """
+        Compute hedge delta for a single delivery month using polynomial regression.
 
+        Parameters
+        ----------
+        asset_day : pd.Timestamp
+            The current simulation day for which the hedge is computed.
+        asset : str
+            Either POWER or COAL, representing the asset type.
+        delivery_start : str
+            The first day of the delivery month.
+        front_months_fwds : pd.DataFrame
+            Forward prices for this delivery month (shape: n_sims x n_delivery_days).
+        r2_threshold : float, default=0.0
+            Minimum acceptable R² value. If regression R² is below this, an error is raised.
+
+        Returns
+        -------
+        np.ndarray
+            Predicted hedge positions (delta) for all simulation paths.
+
+        Raises
+        ------
+        ValueError
+            If the regression R² is below the threshold.
+        """
         days_in_front_month: pd.DatetimeIndex = pd.date_range(
             start=delivery_start, end=delivery_start + pd.offsets.MonthEnd(0)
         )
@@ -213,33 +238,29 @@ class MinVarHedge:
         asset_days_in_front_month = self._cashflows.index.intersection(days_in_front_month)
 
         cashflows_from_asset = self._cashflows.loc[asset_days_in_front_month].values
-
-        alpha = cashflows_from_asset.sum(axis=0)  # shape (n_sims,)
+        cashflow_sum_from_asset = cashflows_from_asset.sum(axis=0)  # shape (n_sims,)
 
         beta = (
             self._spots[asset].loc[days_in_front_month].values.sum(axis=0)
         )  # shape (n_sims,)
 
-        y = (
-            alpha / beta
-        )  # the sum of the spots over the delivery months are always non zero
+        x = front_months_fwds.values  # forward features (n_sims,)
+        y = cashflow_sum_from_asset  # target cashflows
 
-        # Construct features: beta_i * gamma_i^k for k=0..degree
-        x = front_months_fwds.values
-
-        # Fit polynomial regression
-        poly_reg = PolynomialRegression(
-            x=x, y=y, degree=self._polynomial_degree, poly_type=self._polynomial_type
-        )
+        # --- Fit minimum-variance polynomial regression -------------------------
+        minvar_reg = MinVarPolynomialRegression(x=x, y=y, beta=beta,
+            degree=self._polynomial_degree,
+            poly_type=self._polynomial_type,)
 
         # Perform regression
-        results = poly_reg.regress()
+        results = minvar_reg.regress()
         delta_positions = results[KEY_PREDICTED]
         r2_score = results[KEY_R2]
 
+        # --- Validation ---------------------------------------------------------
         # Check R² threshold
         if r2_score < r2_threshold:
-            delivery_month = delivery_start.strftime("%Y-%m")
+            delivery_month = pd.Timestamp(delivery_start).strftime("%Y-%m")
             raise ValueError(
                 f"Regression R²={r2_score:.4f} below threshold {r2_threshold} "
                 f"for underlying {asset} and the delivery month {delivery_month}."
@@ -286,113 +307,3 @@ class MinVarHedge:
 
         print(f"All results saved in folder: {run_folder}")
 
-    def plot_r2(self):
-        """
-        Plot R² values over simulation days for both POWER and COAL in a two-row plot,
-        with each delivery start date shown as a separate line.
-        """
-        assets = [POWER, COAL]
-        fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
-
-        for ax, asset in zip(axes, assets):
-            asset_index = 0 if asset == POWER else 1
-            for delivery_index, delivery_start in enumerate(self._delivery_start_dates):
-                r2_values = self._r2_scores[:, delivery_index, asset_index].values
-                ax.plot(
-                    self._simulation_days,
-                    r2_values,
-                    label=f"Delivery {pd.Timestamp(delivery_start).strftime('%Y-%m')}"
-                )
-            ax.set_ylabel("R² Value")
-            ax.set_title(f"{asset} R² over time")
-            ax.grid(True)
-            ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
-
-        axes[1].set_xlabel("Simulation Day")
-        plt.tight_layout()
-        plt.show(block=True)
-
-
-if __name__ == "__main__":
-    config_path_spread_model = "model_configs/spread_model.json"
-
-    as_of_date = pd.Timestamp("2025-09-30")
-
-    simulation_start = as_of_date
-    simulation_end = pd.Timestamp("2026-12-30")
-
-    simulation_days = pd.date_range(
-        start=simulation_start, end=simulation_end, freq="D"
-    )
-
-    spread_model = SpreadModel(
-        as_of_date, simulation_days, config_path=config_path_spread_model
-    )
-
-    n_sims = 1000
-
-    power_fwd_0 = generate_yearly_seasonal_curve(
-        as_of_date=as_of_date,
-        start_date=simulation_start,
-        end_date=simulation_end,
-        winter_value=120,
-        summer_value=60.0,
-    )
-
-    coal_fwd_0 = ForwardCurve.generate_curve(
-        as_of_date=as_of_date,
-        start_date=simulation_start,
-        end_date=simulation_end,
-        start_value=90.0,
-        end_value=70.0,
-        name="Coal Forward Curve",
-    )
-
-    (
-        power_fwd,
-        power_month_ahead,
-        power_spot,
-        coal_fwd,
-        coal_month_ahead,
-        coal_spot,
-    ) = spread_model.simulate(
-        power_fwd_0=power_fwd_0, coal_fwd_0=coal_fwd_0, n_sims=n_sims, use_cache=True
-    )
-
-    asset_start = pd.Timestamp(2025, 10, 1)
-    asset_end = simulation_start + pd.Timedelta(days=365)
-
-    asset_days = pd.date_range(start=asset_start, end=asset_end, freq="D")
-
-    initial_state = OperationalState.IDLE
-
-    power_plant = PowerPlant(
-        n_sims=n_sims,
-        asset_days=asset_days,
-        initial_state=initial_state,
-        spots_power=power_spot,
-        spots_coal=coal_spot,
-        fwds_power=power_fwd,
-        fwds_coal=coal_fwd,
-        fwd_0_power=power_fwd_0,
-        fwd_0_coal=coal_fwd_0,
-        config_path="asset_configs/power_plant_config.yaml",
-    )
-
-    # Run the simulation
-    power_plant.optimize()
-
-    min_var_hedge = MinVarHedge(
-        n_sims=n_sims,
-        simulation_days=simulation_days,
-        power_plant=power_plant,
-        spots_power=power_spot,
-        spots_coal=coal_spot,
-        fwds_power=power_fwd,
-        fwds_coal=coal_fwd,
-    )
-
-    min_var_hedge.hedge()
-
-    min_var_hedge.save_results(run_name='hedge_run_oct_25-oct26')
-    min_var_hedge.plot_r2()

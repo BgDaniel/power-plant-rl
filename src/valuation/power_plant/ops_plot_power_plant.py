@@ -11,7 +11,7 @@ import numpy as np
 from valuation.power_plant.power_plant import PowerPlant
 
 
-class OpsPlot:
+class OpsPlotPowerPlant:
     """
     Class for plotting results from a PowerPlant simulation.
 
@@ -299,8 +299,8 @@ class OpsPlot:
             ]
             # Ramping Up: green circle, slightly larger
             ax3.scatter(
-                asset_days[ramp_up_idx],
-                spreads_path[ramp_up_idx],
+                asset_days.iloc[ramp_up_idx],
+                spreads_path.iloc[ramp_up_idx],
                 color="green",
                 marker="o",
                 s=40,  # marker size
@@ -309,8 +309,8 @@ class OpsPlot:
 
             # Ramping Down: red cross, slightly larger
             ax3.scatter(
-                asset_days[ramp_down_idx],
-                spreads_path[ramp_down_idx],
+                asset_days.iloc[ramp_down_idx],
+                spreads_path.iloc[ramp_down_idx],
                 color="red",
                 marker="X",
                 s=40,  # marker size

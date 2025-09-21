@@ -153,6 +153,7 @@ class SpreadModel:
         power_fwd, power_month_ahead, power_spot = self.two_factor_power_model.simulate(
             fwd_0=power_fwd_0, n_sims=n_sims
         )
+
         coal_fwd, coal_month_ahead, coal_spot = self.two_factor_coal_model.simulate(
             fwd_0=coal_fwd_0, n_sims=n_sims
         )

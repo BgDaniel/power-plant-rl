@@ -18,9 +18,9 @@ from valuation.power_plant.power_plant_config import (
 )
 from regression.polynomial_regressor import (
     PolynomialRegression,
-    KEY_PREDICTED,
-    KEY_R2,
 )
+from regression.regression_helpers import KEY_R2, KEY_PREDICTED
+from regression.polynomial_base_builder import PolynomialBasisBuilder
 
 
 logger = logging.getLogger(__name__)
@@ -85,7 +85,7 @@ class PowerPlant:
         fwd_0_coal: ForwardCurve,
         config: Optional[PowerPlantConfig] = None,
         config_path: Optional[str] = None,
-        polynomial_type: str = PolynomialRegression.POLY_LEGENDRE,
+        polynomial_type: str = PolynomialBasisBuilder.POLY_LEGENDRE,
         polynomial_degree: int = 3,
     ) -> None:
         """
@@ -423,7 +423,7 @@ class PowerPlant:
         self,
         asset_day: pd.Timestamp,
         state: OperationalState,
-        r2_threshold: float = 0.0,
+        r2_threshold: float = 0.4,
     ) -> np.ndarray:
         """
         Regress the optimal value for a given day and operational state
