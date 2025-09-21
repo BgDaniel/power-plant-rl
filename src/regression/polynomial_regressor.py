@@ -1,4 +1,6 @@
 import numpy as np
+from sklearn.decomposition import PCA
+from itertools import product
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
@@ -58,30 +60,54 @@ class PolynomialRegression:
         y: np.ndarray,
         degree: int = 3,
         poly_type: str = POLY_STANDARD,
+        n_components: Optional[int] = 3,  # NEW: PCA components
     ) -> None:
-        """
-        Initialize the polynomial regression.
-
-        Parameters
-        ----------
-        x : np.ndarray
-            Input feature vector(s), shape (n_samples, n_features).
-        y : np.ndarray
-            Target vector, shape (n_samples,).
-        degree : int
-            Degree of polynomial to fit.
-        poly_type : str
-            Type of polynomial basis (standard, legendre, chebyshev).
-        """
         if poly_type not in self.SUPPORTED_POLYNOMIALS:
             raise ValueError(f"Unsupported polynomial type: {poly_type}")
 
         self.x: np.ndarray = x
         self.y: np.ndarray = y
+        self._n_sims, self.n_features = self.x.shape
         self.degree: int = degree
         self.poly_type: str = poly_type
+        self.n_components: Optional[int] = n_components
         self.model: Optional[LinearRegression] = None
         self.x_poly: Optional[np.ndarray] = None
+        self.pca_model: Optional[PCA] = None
+
+    # -------------------------
+    # Helper methods
+    # -------------------------
+    @staticmethod
+    def _scaled(x: np.ndarray) -> np.ndarray:
+        """Scale features to [-1, 1] for orthogonal polynomials."""
+        return 2 * (x - x.min(axis=0)) / (x.max(axis=0) - x.min(axis=0)) - 1
+
+    @staticmethod
+    def _multiindex(n_features: int, degree: int):
+        """Generate all exponent tuples with total degree <= degree."""
+        for powers in product(range(degree + 1), repeat=n_features):
+            if sum(powers) <= degree:
+                yield powers
+
+    def _build_orthogonal_features(self) -> np.ndarray:
+        """
+        Build a multivariate Legendre/Chebyshev design matrix for arbitrary dimension.
+        """
+        x_scaled = self._scaled(self.x)
+        n_samples, n_features = x_scaled.shape
+        basis = []
+
+        for powers in self._multiindex(n_features, self.degree):
+            col = np.ones(n_samples)
+            for j, p in enumerate(powers):
+                if self.poly_type == self.POLY_LEGENDRE:
+                    col *= np.polynomial.legendre.Legendre.basis(p)(x_scaled[:, j])
+                else:
+                    col *= np.polynomial.chebyshev.Chebyshev.basis(p)(x_scaled[:, j])
+            basis.append(col)
+
+        return np.column_stack(basis)
 
     def regress(self) -> Dict[str, np.ndarray]:
         """
@@ -113,31 +139,21 @@ class PolynomialRegression:
             }
 
         # -------------------------
+        # Optional PCA
+        # -------------------------
+        if (self.n_components is not None) and (self.n_components < self.n_features):
+            self.pca_model = PCA(n_components=self.n_components)
+            self.x = self.pca_model.fit_transform(self.x)
+
+        # -------------------------
         # Normal polynomial regression
         # -------------------------
         if self.poly_type == self.POLY_STANDARD:
             poly = PolynomialFeatures(degree=self.degree)
             self.x_poly = poly.fit_transform(self.x)
-        elif self.poly_type == self.POLY_LEGENDRE:
-            x_scaled = (
-                2
-                * (self.x - self.x.min(axis=0))
-                / (self.x.max(axis=0) - self.x.min(axis=0))
-                - 1
-            )
-            self.x_poly = np.polynomial.legendre.legvander2d(
-                x_scaled[:, 0], x_scaled[:, 1], [self.degree, self.degree]
-            )
-        elif self.poly_type == self.POLY_CHEBYSHEV:
-            x_scaled = (
-                2
-                * (self.x - self.x.min(axis=0))
-                / (self.x.max(axis=0) - self.x.min(axis=0))
-                - 1
-            )
-            self.x_poly = np.polynomial.chebyshev.chebvander2d(
-                x_scaled[:, 0], x_scaled[:, 1], [self.degree, self.degree]
-            )
+        else:
+            # Multidimensional Legendre or Chebyshev
+            self.x_poly = self._build_orthogonal_features()
 
         # Fit linear regression
         self.model = LinearRegression()

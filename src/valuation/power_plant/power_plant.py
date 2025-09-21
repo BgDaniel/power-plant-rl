@@ -414,7 +414,7 @@ class PowerPlant:
             Filtered forward prices with restricted DELIVERY_START.
         """
         # Define interval
-        start = pd.Timestamp(asset_day)
+        start = pd.Timestamp(asset_day) + pd.Timedelta(days=1)
         end = self.asset_days[-1]  # last asset day
 
         return fwds.sel({DELIVERY_START: slice(start, end), SIMULATION_DAY: asset_day})

@@ -12,7 +12,7 @@ as_of_date = pd.Timestamp("2025-09-13")
 n_days = 365
 
 simulation_start = as_of_date
-simulation_end = simulation_start + pd.Timedelta(days=365 + 31)
+simulation_end = simulation_start + pd.Timedelta(days=365 + 90)
 
 simulation_days = pd.date_range(start=simulation_start, end=simulation_end, freq="D")
 
