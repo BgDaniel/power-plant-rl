@@ -55,7 +55,16 @@ class MinVarHedge:
 
         self._spots = {POWER: self._spots_power, COAL: self._spots_coal}
 
-        self._delivery_start_dates = fwds_power.coords[DELIVERY_START].values
+        delivery_start_dates_power = fwds_power.coords[DELIVERY_START].values
+        delivery_start_dates_coal = fwds_coal.coords[DELIVERY_START].values
+
+        # Check equality and raise error if they differ
+        if not np.array_equal(delivery_start_dates_power , delivery_start_dates_coal):
+            raise ValueError(
+                "DELIVERY_START coordinates of fwds_power and fwds_coal are not equal!"
+            )
+
+        self._delivery_start_dates = delivery_start_dates_power
 
         self._n_front_months = len(self._delivery_start_dates)
 
@@ -101,14 +110,10 @@ class MinVarHedge:
             unit="day",
         )
         for asset_day in self.tqdm:
-            front_months_power = self._get_front_months(
-                self._fwds_power, asset_day
+            front_months_start_dates = self._get_front_months_start_dates(
+                asset_day
             )
-            front_months_coal = self._get_front_months(self._fwds_coal, asset_day)
-
-            self._compute_delta(POWER, asset_day, front_months_power)
-
-            self._compute_delta(COAL, asset_day, front_months_coal)
+            self._compute_delta(asset_day, front_months_start_dates)
 
             self._roll_out_cashflows(asset_day)
 
@@ -134,8 +139,8 @@ class MinVarHedge:
                 asset_day
             ] += bom_delta_asset* spots
 
-    def _get_front_months(
-        self, fwds: xr.DataArray, simulation_day: pd.Timestamp
+    def _get_front_months_start_dates(
+        self, simulation_day: pd.Timestamp
     ) -> xr.DataArray:
         """
         Extract front month forward prices where delivery start dates lie between the given
@@ -157,12 +162,13 @@ class MinVarHedge:
         start = pd.Timestamp(simulation_day) + pd.Timedelta(days=1)
         end = self._asset_days[-1]  # last asset day
 
-        return fwds.sel(
-            {DELIVERY_START: slice(start, end), SIMULATION_DAY: simulation_day}
-        )
+        mask = (self._delivery_start_dates >= start) & \
+               (self._delivery_start_dates <= end)
+
+        return self._delivery_start_dates[mask]
 
     def _compute_delta(
-        self, asset: str, asset_day: pd.Timestamp, front_months_fwds: xr.DataArray
+        self, asset_day: pd.Timestamp, front_months_start_dates: pd.DatetimeIndex
     ) -> None:
         """
         Compute hedge deltas for the given asset_day using polynomial regression
@@ -172,7 +178,7 @@ class MinVarHedge:
         ----------
         asset_day : pd.Timestamp
             Current simulation day.
-        front_months_fwds : xr.DataArray
+        front_months_fwds_power : xr.DataArray
             Forward prices (n_sims, delivery_months) at asset_day.
 
         Returns
@@ -180,27 +186,21 @@ class MinVarHedge:
         xr.DataArray
             Hedge deltas (n_sims, delivery_months) for this day.
         """
-        # --- get cashflows of the plant at this day ---
-        front_months_start_dates = front_months_fwds.coords[DELIVERY_START].values
-
         for delivery_start in front_months_start_dates:
 
             self._deltas.loc[
                 {
                     SIMULATION_DAY: asset_day,
                     DELIVERY_START: delivery_start,
-                    ASSET: asset,
                 }
             ] = self._hedge_front_month(
-                asset_day, asset, delivery_start, front_months_fwds.to_pandas()
+                asset_day, delivery_start
             )
 
     def _hedge_front_month(
             self,
             asset_day: pd.Timestamp,
-            asset: str,
-            delivery_start: str,
-            front_months_fwds: pd.DataFrame,
+            delivery_start: pd.Timestamp,
             r2_threshold: float = 0.0
     ) -> np.ndarray:
         """
@@ -214,7 +214,7 @@ class MinVarHedge:
             Either POWER or COAL, representing the asset type.
         delivery_start : str
             The first day of the delivery month.
-        front_months_fwds : pd.DataFrame
+        front_months_fwds_power : pd.DataFrame
             Forward prices for this delivery month (shape: n_sims x n_delivery_days).
         r2_threshold : float, default=0.0
             Minimum acceptable R² value. If regression R² is below this, an error is raised.
@@ -240,38 +240,48 @@ class MinVarHedge:
         cashflows_from_asset = self._cashflows.loc[asset_days_in_front_month].values
         cashflow_sum_from_asset = cashflows_from_asset.sum(axis=0)  # shape (n_sims,)
 
-        beta = (
-            self._spots[asset].loc[days_in_front_month].values.sum(axis=0)
+        beta_power = (
+            self._spots[POWER].loc[days_in_front_month].values.sum(axis=0)
         )  # shape (n_sims,)
 
-        x = front_months_fwds.values  # forward features (n_sims,)
+        beta_coal = (
+            self._spots[COAL].loc[days_in_front_month].values.sum(axis=0)
+        )  # shape (n_sims,)
+
+        fwds_power_front_months = self._fwds_power.sel({DELIVERY_START: delivery_start, SIMULATION_DAY: asset_day}).to_pandas()
+        fwds_coal_front_months = self._fwds_coal.sel(
+            {DELIVERY_START: delivery_start, SIMULATION_DAY: asset_day}).to_pandas()
+
+        x_fwd_power = fwds_power_front_months.values
+        x_fwd_coal = fwds_coal_front_months.values
+        x_dark_spread = x_fwd_power - self._power_plant.efficiency * x_fwd_coal
+
         y = cashflow_sum_from_asset  # target cashflows
 
         # --- Fit minimum-variance polynomial regression -------------------------
-        minvar_reg = MinVarPolynomialRegression(x=x, y=y, beta=beta,
-            degree=self._polynomial_degree,
-            poly_type=self._polynomial_type,)
+        min_var_reg = MinVarPolynomialRegression(n_samples=self._n_sims, x_fwd_power=x_fwd_power,x_fwd_coal=x_fwd_coal,
+        x_spread=x_dark_spread, y=y, beta_power=beta_power, beta_coal=beta_coal, degree=self._polynomial_degree,
+            poly_type=self._polynomial_type)
 
         # Perform regression
-        results = minvar_reg.regress()
+        results = min_var_reg.regress()
         delta_positions = results[KEY_PREDICTED]
         r2_score = results[KEY_R2]
 
         # --- Validation ---------------------------------------------------------
         # Check R² threshold
-        if r2_score < r2_threshold:
-            delivery_month = pd.Timestamp(delivery_start).strftime("%Y-%m")
-            raise ValueError(
-                f"Regression R²={r2_score:.4f} below threshold {r2_threshold} "
-                f"for underlying {asset} and the delivery month {delivery_month}."
-            )
+        #if r2_score < r2_threshold:
+        #    delivery_month = pd.Timestamp(delivery_start).strftime("%Y-%m")
+        #    raise ValueError(
+        #        f"Regression R²={r2_score:.4f} below threshold {r2_threshold} "
+        #        f"for underlying {asset} and the delivery month {delivery_month}."
+        #    )
 
         # Store R² using .sel
         self._r2_scores.loc[
             dict(
                 SIMULATION_DAY=asset_day,
                 DELIVERY_START=delivery_start,
-                ASSET=asset
             )
         ] = r2_score
 

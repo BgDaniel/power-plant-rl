@@ -86,7 +86,7 @@ class PolynomialRegression:
         r2 = self.model.score(self.x_poly, self.y)
 
         if ss_tot < EPS:  # target is constant
-            r2 = 1.0
+            r2 = float('nan')
 
         return {
             KEY_PREDICTED: y_pred,

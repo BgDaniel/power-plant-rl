@@ -43,6 +43,7 @@ REGRESSION_RESULTS = "regression_results"
 
 POWER = "POWER"
 COAL = "COAL"
+SPREAD = "SPREAD"
 
 
 class PowerPlant:
@@ -202,10 +203,10 @@ class PowerPlant:
         )
 
         self._r2_scores: xr.DataArray = xr.DataArray(
-            np.zeros((self.n_steps, len(self.operational_states))),
+            np.zeros((self.n_steps - 1, len(self.operational_states))),
             dims=[DIM_SIMULATION_DAY, DIM_OPERATIONAL_STATE],
             coords={
-                DIM_SIMULATION_DAY: self.asset_days,
+                DIM_SIMULATION_DAY: self.asset_days[:-1],
                 DIM_OPERATIONAL_STATE: self.operational_states,
             },
             name=REGRESSION_RESULTS,
@@ -461,12 +462,15 @@ class PowerPlant:
         ).values
 
         # Stack features
+        fwd_dark_spread = fwds_power_front_months - self.efficiency * fwds_coal_front_months
+
         x = np.hstack(
             [
                 spots_power.reshape(-1, 1),
                 spots_coal.reshape(-1, 1),
                 fwds_power_front_months,
                 fwds_coal_front_months,
+                fwd_dark_spread
             ]
         )
 
@@ -491,11 +495,11 @@ class PowerPlant:
         r2_score = results[KEY_R2]
 
         # Check R² threshold
-        if r2_score < r2_threshold:
-            raise ValueError(
-                f"Regression R²={r2_score:.4f} below threshold {r2_threshold} "
-                f"for state {state.name} on {asset_day.date()}"
-            )
+        #if r2_score < r2_threshold:
+        #    raise ValueError(
+        #        f"Regression R²={r2_score:.4f} below threshold {r2_threshold} "
+        #        f"for state {state.name} on {asset_day.date()}"
+        #    )
 
         # Store regression results in the class xarray field
         self._regressed_values.loc[

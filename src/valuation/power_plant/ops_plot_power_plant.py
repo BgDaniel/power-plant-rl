@@ -77,10 +77,9 @@ class OpsPlotPowerPlant:
 
         for state in states:
             r2_values = self.power_plant._r2_scores.sel(
-                simulation_day=asset_days, operational_state=state
-            ).values
+                operational_state=state
+            )
             plt.plot(
-                asset_days,
                 r2_values,
                 label=state.name,  # Use enum name for legend
                 color=color_map.get(state, "blue"),
@@ -299,7 +298,7 @@ class OpsPlotPowerPlant:
             ]
             # Ramping Up: green circle, slightly larger
             ax3.scatter(
-                asset_days.iloc[ramp_up_idx],
+                asset_days[ramp_up_idx],
                 spreads_path.iloc[ramp_up_idx],
                 color="green",
                 marker="o",
@@ -309,7 +308,7 @@ class OpsPlotPowerPlant:
 
             # Ramping Down: red cross, slightly larger
             ax3.scatter(
-                asset_days.iloc[ramp_down_idx],
+                asset_days[ramp_down_idx],
                 spreads_path.iloc[ramp_down_idx],
                 color="red",
                 marker="X",

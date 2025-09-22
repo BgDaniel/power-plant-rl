@@ -31,16 +31,16 @@ power_fwd_0 = generate_yearly_seasonal_curve(
     as_of_date=as_of_date,
     start_date=simulation_start,
     end_date=simulation_end,
-    winter_value=120,
-    summer_value=60.0,
+    winter_value=60,
+    summer_value=40.0,
 )
 
 coal_fwd_0 = ForwardCurve.generate_curve(
     as_of_date=as_of_date,
     start_date=simulation_start,
     end_date=simulation_end,
-    start_value=90.0,
-    end_value=70.0,
+    start_value=100.0,
+    end_value=120.0,
     name="Coal Forward Curve",
 )
 
@@ -95,6 +95,42 @@ min_var_hedge = MinVarHedge(
 min_var_hedge.hedge()
 min_var_hedge.save_results(run_name='hedge_run_oct_25-oct26')
 
-ops_plot_min_var_hedge = OpsPlotMinVarHedge(power_plant)
+ops_plot_min_var_hedge = OpsPlotMinVarHedge(min_var_hedge)
 ops_plot_min_var_hedge.plot_r2()
 
+
+# min_var_hedge.cashflows
+# power_plant.optimal_cashflows
+
+min_var_cashflows = min_var_hedge.cashflows
+optimal_cashflows = power_plant.optimal_cashflows
+
+# Compute row-wise variance across assets
+var_min_var = min_var_cashflows.var(axis=1)
+var_optimal = optimal_cashflows.var(axis=1)
+
+# Compute residual cashflows
+residuals = min_var_cashflows - optimal_cashflows
+var_residuals = residuals.var(axis=1)
+
+# Compute row-wise R²: treating each row as y_true vs y_pred
+r2_rows = []
+for i in range(residuals.shape[0]):
+    r2 = r2_score(optimal_cashflows.iloc[i, :], min_var_cashflows.iloc[i, :])
+    r2_rows.append(r2)
+r2_rows = np.array(r2_rows)
+
+# Plotting
+plt.figure(figsize=(12, 6))
+
+plt.plot(var_min_var, label="Variance: MinVar Hedge", lw=2)
+plt.plot(var_optimal, label="Variance: Optimal Cashflows", lw=2)
+plt.plot(var_residuals, label="Variance: Residuals", lw=2)
+plt.plot(r2_rows, label="Row-wise R²", lw=2, linestyle='--', color='black')
+
+plt.xlabel("Day / Simulation Path")
+plt.ylabel("Variance / R²")
+plt.title("Row-wise Variance and R² of MinVar Hedge vs Optimal Cashflows")
+plt.legend()
+plt.grid(True)
+plt.show()
