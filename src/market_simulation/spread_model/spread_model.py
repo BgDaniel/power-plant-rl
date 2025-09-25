@@ -1,17 +1,13 @@
 import numpy as np
 import pandas as pd
 import xarray as xr
-from typing import Dict
+
 from typing import Optional
 from market_simulation.two_factor_model.two_factor_model import TwoFactorForwardModel
 from market_simulation.two_factor_model.two_factor_model_config import (
     TwoFactorModelConfig,
 )
 from market_simulation.spread_model.spread_model_config import SpreadModelConfig
-
-SIMULATION = "simulation"
-DAY = "day"
-REL_FWD = "relative_forward"
 
 
 class SpreadModel:

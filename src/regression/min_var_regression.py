@@ -4,14 +4,14 @@ import numpy as np
 from numpy.polynomial.legendre import legvander
 from numpy.polynomial.chebyshev import chebvander
 from sklearn.metrics import r2_score
-from typing import ClassVar, Dict, List
+from typing import ClassVar, Dict, List, TypeVar
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import numpy as np
 import xarray as xr
 from scipy.interpolate import griddata
 
-
+from delta_position.delta_position import DeltaPosition
 from market_simulation.constants import SIMULATION_PATH
 
 
@@ -23,6 +23,7 @@ SPREAD_TANH = 'SPREAD_TANH'
 ASSET = 'ASSET'
 DELTA_POSITION = 'DELTA_POSITION'
 SPREAD_IND ='SPREAD_IND'
+
 
 
 class MinVarPolynomialRegression:

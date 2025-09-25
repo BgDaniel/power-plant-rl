@@ -189,7 +189,7 @@ class OpsPlotPowerPlant:
 
         # --- Row 2: Cashflows ---
         cashflows = (
-            self.power_plant.optimal_cashflows
+            self.power_plant.cashflows
         )  # shape (n_days, n_paths) or (n_paths, n_days)
 
         cash_mean = cashflows.mean(axis=1)

@@ -1,26 +1,27 @@
 import os
 import tempfile
-import matplotlib.pyplot as plt
+from typing import TypeVar
+
+
 import pandas as pd
 import numpy as np
 import xarray as xr
 from tqdm import tqdm
 
+from delta_position.delta_position import DeltaPosition
+from delta_position.min_var_delta.min_var_delta import MinVarDelta
 from regression.min_var_regression import MinVarPolynomialRegression
 from market_simulation.constants import SIMULATION_PATH, SIMULATION_DAY, DELIVERY_START
 from market_simulation.two_factor_model.simulation_caching import CACHE_FOLDER_ENV
 from regression.polynomial_base_builder import PolynomialBasisBuilder
 
 from valuation.power_plant.power_plant import PowerPlant
-from valuation.power_plant.power_plant import POWER, COAL
 
-from regression.regression_helpers import KEY_R2, KEY_PREDICTED
+from constants import POWER, COAL, KEY_R2, KEY_PREDICTED, ASSET, DELTA_POSITION
 
 
-DELTA_POWER = "DELTA_POWER"
-DELTA_COAL = "DELTA_COAL"
-ASSET = "ASSET"
-DELTA_POSITION = "DELTA_POSITION"
+
+TDelta = TypeVar("TDelta", bound=DeltaPosition)
 
 
 class MinVarHedge:
@@ -35,6 +36,7 @@ class MinVarHedge:
         fwds_coal: xr.DataArray,  # (n_sims, n_days, n_delivery_months)
         polynomial_type: str = PolynomialBasisBuilder.POLY_LEGENDRE,
         polynomial_degree: int = 4,
+        delta_position_type: TDelta = MinVarDelta
     ):
         self._n_sims = n_sims
         self._simulation_days = simulation_days
@@ -46,14 +48,26 @@ class MinVarHedge:
 
         self._asset_days = power_plant.asset_days
 
-        self._cashflows = self._power_plant.optimal_cashflows
+        self._cashflows = self._power_plant.cashflows
 
         self._spots_power = spots_power
         self._spots_coal = spots_coal
-        self._fwds_power = fwds_power
-        self._fwds_coal = fwds_coal
+
+        self._fwds = xr.concat(
+            [fwds_power, fwds_coal],
+            dim=xr.DataArray([POWER, COAL], dims=[ASSET])
+        )
 
         self._spots = {POWER: self._spots_power, COAL: self._spots_coal}
+
+        self._spots = xr.DataArray(
+            np.stack([spots_power.values, spots_coal.values], axis=0),
+        dims=[ASSET, SIMULATION_DAY, SIMULATION_PATH],
+        coords={
+            ASSET: [POWER, COAL],
+            SIMULATION_DAY: spots_power.index,
+            SIMULATION_PATH: spots_power.columns,
+        })
 
         delivery_start_dates_power = fwds_power.coords[DELIVERY_START].values
         delivery_start_dates_coal = fwds_coal.coords[DELIVERY_START].values
@@ -70,6 +84,8 @@ class MinVarHedge:
 
         self._polynomial_type = polynomial_type
         self._polynomial_degree = polynomial_degree
+
+        self._delta_position_type = delta_position_type
 
         coords = {
             SIMULATION_PATH: np.arange(self._n_sims),
@@ -132,12 +148,12 @@ class MinVarHedge:
                 SIMULATION_DAY: bom_maturity_day
             })
 
-            spots = self._spots_power.loc[asset_day] if asset == POWER else self._spots_coal.loc[asset_day].values
+            spots = self._spots.sel({SIMULATION_DAY: asset_day, ASSET: asset})
 
             # hedge poistion are struck with strike price zero
             self.cashflows.loc[
                 asset_day
-            ] += bom_delta_asset* spots
+            ] += bom_delta_asset.values* spots
 
     def _get_front_months_start_dates(
         self, simulation_day: pd.Timestamp
@@ -237,34 +253,23 @@ class MinVarHedge:
         # at the end of the asset computatin horizom
         asset_days_in_front_month = self._cashflows.index.intersection(days_in_front_month)
 
-        cashflows_from_asset = self._cashflows.loc[asset_days_in_front_month].values
-        cashflow_sum_from_asset = cashflows_from_asset.sum(axis=0)  # shape (n_sims,)
+        y = self._cashflows.loc[asset_days_in_front_month].values.sum(axis=0)
 
-        beta_power = (
-            self._spots[POWER].loc[days_in_front_month].values.sum(axis=0)
-        )  # shape (n_sims,)
+        beta = self._spots.sel(SIMULATION_DAY=days_in_front_month).sum(dim=SIMULATION_DAY)
 
-        beta_coal = (
-            self._spots[COAL].loc[days_in_front_month].values.sum(axis=0)
-        )  # shape (n_sims,)
+        fwds = self._fwds.sel({
+            DELIVERY_START: delivery_start, SIMULATION_DAY: asset_day
+        })
 
-        fwds_power_front_months = self._fwds_power.sel({DELIVERY_START: delivery_start, SIMULATION_DAY: asset_day}).to_pandas()
-        fwds_coal_front_months = self._fwds_coal.sel(
-            {DELIVERY_START: delivery_start, SIMULATION_DAY: asset_day}).to_pandas()
+        beta = self._spots.sel({
+            SIMULATION_DAY: asset_day
+        })
 
-        x_fwd_power = fwds_power_front_months.values
-        x_fwd_coal = fwds_coal_front_months.values
-        x_dark_spread = x_fwd_power - self._power_plant.efficiency * x_fwd_coal
-
-        y = cashflow_sum_from_asset  # target cashflows
-
-        # --- Fit minimum-variance polynomial regression -------------------------
-        min_var_reg = MinVarPolynomialRegression(n_samples=self._n_sims, x_fwd_power=x_fwd_power,x_fwd_coal=x_fwd_coal,
-        x_spread=x_dark_spread, y=y, beta_power=beta_power, beta_coal=beta_coal, degree=self._polynomial_degree,
-            poly_type=self._polynomial_type)
+        delta_position_calculator = self._delta_position_type(fwds=fwds, y=y,
+                                                              beta=beta, efficiency=self._power_plant.efficiency)
 
         # Perform regression
-        results = min_var_reg.regress()
+        results = delta_position_calculator.compute()
         delta_positions = results[KEY_PREDICTED]
         r2_score = results[KEY_R2]
 

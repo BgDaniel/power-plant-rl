@@ -60,7 +60,7 @@ class PowerPlant:
     n_steps : int
         Number of time steps in the simulation (= len(simulation_days)).
 
-    cashflows : xr.DataArray
+    cashflows_for_states : xr.DataArray
         Cashflows for each (day, simulation path, operational state).
         Shape: (n_steps, n_sims, 4).
     value : xr.DataArray
@@ -149,7 +149,7 @@ class PowerPlant:
         # -----------------------
         # Cashflows
         # -----------------------
-        self.cashflows: xr.DataArray = xr.DataArray(
+        self.cashflows_for_states: xr.DataArray = xr.DataArray(
             np.zeros((self.n_steps, self.n_sims, len(self.operational_states))),
             dims=[DIM_SIMULATION_DAY, DIM_SIMULATION_PATH, DIM_OPERATIONAL_STATE],
             coords={
@@ -163,7 +163,7 @@ class PowerPlant:
         # -----------------------
         # Values
         # -----------------------
-        self.values: xr.DataArray = xr.DataArray(
+        self.values_for_states: xr.DataArray = xr.DataArray(
             np.zeros((self.n_steps, self.n_sims, len(self.operational_states))),
             dims=[DIM_SIMULATION_DAY, DIM_SIMULATION_PATH, DIM_OPERATIONAL_STATE],
             coords={
@@ -225,7 +225,7 @@ class PowerPlant:
             index=self.asset_days,
             columns=range(self.n_sims),
         )
-        self.optimal_cashflows = pd.DataFrame(
+        self.cashflows = pd.DataFrame(
             np.zeros((self.n_steps, self.n_sims)),
             index=self.asset_days,
             columns=range(self.n_sims),
@@ -239,22 +239,22 @@ class PowerPlant:
         last_day = self.asset_days[-1]
         spread_last = self.spreads.loc[last_day]
 
-        self.cashflows.loc[
+        self.cashflows_for_states.loc[
             {DIM_SIMULATION_DAY: last_day, DIM_OPERATIONAL_STATE: OperationalState.IDLE}
         ] = -self.idle_costs
-        self.cashflows.loc[
+        self.cashflows_for_states.loc[
             {
                 DIM_SIMULATION_DAY: last_day,
                 DIM_OPERATIONAL_STATE: OperationalState.RAMPING_UP,
             }
         ] = -self.ramping_up_costs
-        self.cashflows.loc[
+        self.cashflows_for_states.loc[
             {
                 DIM_SIMULATION_DAY: last_day,
                 DIM_OPERATIONAL_STATE: OperationalState.RAMPING_DOWN,
             }
         ] = -self.ramping_down_costs
-        self.cashflows.loc[
+        self.cashflows_for_states.loc[
             {
                 DIM_SIMULATION_DAY: last_day,
                 DIM_OPERATIONAL_STATE: OperationalState.RUNNING,
@@ -304,10 +304,10 @@ class PowerPlant:
             dict(simulation_day=asset_day, operational_state=ramp_up)
         ]
 
-        self.cashflows.loc[dict(simulation_day=asset_day, operational_state=idle)] = (
+        self.cashflows_for_states.loc[dict(simulation_day=asset_day, operational_state=idle)] = (
             -self.idle_costs
         )
-        self.values.loc[dict(simulation_day=asset_day, operational_state=idle)] = (
+        self.values_for_states.loc[dict(simulation_day=asset_day, operational_state=idle)] = (
             -self.idle_costs + np.maximum(cont_val, exer_val)
         )
         self._optimal_control.loc[
@@ -328,10 +328,10 @@ class PowerPlant:
         ramp_up = OperationalState.RAMPING_UP
         running = OperationalState.RUNNING
 
-        self.cashflows.loc[
+        self.cashflows_for_states.loc[
             dict(simulation_day=asset_day, operational_state=ramp_up)
         ] = -self.ramping_up_costs
-        self.values.loc[dict(simulation_day=asset_day, operational_state=ramp_up)] = (
+        self.values_for_states.loc[dict(simulation_day=asset_day, operational_state=ramp_up)] = (
             -self.ramping_up_costs
             + self._regressed_values.loc[
                 dict(simulation_day=asset_day, operational_state=running)
@@ -351,10 +351,10 @@ class PowerPlant:
         ramp_down = OperationalState.RAMPING_DOWN
         idle = OperationalState.IDLE
 
-        self.cashflows.loc[
+        self.cashflows_for_states.loc[
             dict(simulation_day=asset_day, operational_state=ramp_down)
         ] = -self.ramping_down_costs
-        self.values.loc[dict(simulation_day=asset_day, operational_state=ramp_down)] = (
+        self.values_for_states.loc[dict(simulation_day=asset_day, operational_state=ramp_down)] = (
             -self.ramping_down_costs
             + self._regressed_values.loc[
                 dict(simulation_day=asset_day, operational_state=idle)
@@ -381,10 +381,10 @@ class PowerPlant:
             dict(simulation_day=asset_day, operational_state=ramp_down)
         ]
 
-        self.cashflows.loc[
+        self.cashflows_for_states.loc[
             dict(simulation_day=asset_day, operational_state=running)
         ] = (-self.operation_costs + self.efficiency * self.spreads.loc[asset_day])
-        self.values.loc[dict(simulation_day=asset_day, operational_state=running)] = (
+        self.values_for_states.loc[dict(simulation_day=asset_day, operational_state=running)] = (
             -self.operation_costs
             + self.efficiency * self.spreads.loc[asset_day]
             + np.maximum(cont_val, exer_val)
@@ -476,7 +476,7 @@ class PowerPlant:
 
         # Extract target values: optimal value for the next day
         y = (
-            self.values.sel(simulation_day=asset_day + pd.Timedelta(days=1))
+            self.values_for_states.sel(simulation_day=asset_day + pd.Timedelta(days=1))
             .sel(operational_state=state)
             .values
         )
@@ -527,10 +527,10 @@ class PowerPlant:
         # First day
         first_day = self.asset_days[0]
         self._optimal_state.loc[first_day, :] = self._initial_state
-        self._optimal_value.loc[first_day, :] = self.values.sel(
+        self._optimal_value.loc[first_day, :] = self.values_for_states.sel(
             simulation_day=first_day, operational_state=self._initial_state
         ).values
-        self.optimal_cashflows.loc[first_day, :] = self.cashflows.sel(
+        self.cashflows.loc[first_day, :] = self.cashflows_for_states.sel(
             simulation_day=first_day, operational_state=self._initial_state
         ).values
 
@@ -565,10 +565,10 @@ class PowerPlant:
             )
 
             # Fill value and cashflow
-            self._optimal_value.loc[current_day, :] = self.values.sel(
+            self._optimal_value.loc[current_day, :] = self.values_for_states.sel(
                 simulation_day=current_day, operational_state=current_optimal_states
             ).values
-            self.optimal_cashflows.loc[current_day, :] = self.cashflows.sel(
+            self.cashflows.loc[current_day, :] = self.cashflows_for_states.sel(
                 simulation_day=current_day, operational_state=current_optimal_states
             ).values
 
@@ -593,7 +593,7 @@ class PowerPlant:
         --------
         self.cashflows : xr.DataArray
             Updated cashflows for each day, simulation path, and operational state.
-        self.values : xr.DataArray
+        self.values_for_states : xr.DataArray
             Updated values for each day, simulation path, and operational state.
         self.optimal_control : xr.DataArray
             Updated optimal control decisions for each day, path, and state.
