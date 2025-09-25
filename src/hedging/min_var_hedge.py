@@ -100,7 +100,7 @@ class MinVarHedge:
             np.zeros((self._n_sims, self._n_steps, self._n_front_months, 2)),
             dims=[SIMULATION_PATH, SIMULATION_DAY, DELIVERY_START, ASSET],
             coords=coords,
-            name=DELTA_POSITION,
+            name=KEY_DELTA_POSITION,
         )
 
         self._r2_scores = xr.DataArray(
@@ -111,7 +111,7 @@ class MinVarHedge:
                 DELIVERY_START: self._delivery_start_dates,
                 ASSET: [POWER, COAL],
             },
-            name="R2_SCORE",
+            name=KEY_R2,
         )
 
         self.cashflows = pd.DataFrame(
