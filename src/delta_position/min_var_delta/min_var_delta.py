@@ -6,9 +6,9 @@ from itertools import combinations
 from numpy.polynomial.legendre import legvander
 from numpy.polynomial.chebyshev import chebvander
 
-from constants import SIMULATION_PATH, ASSET, POWER, COAL, SPREAD
+from constants import SIMULATION_PATH, ASSET, POWER, COAL, SPREAD, KEY_DELTA_POSITION
 from delta_position.delta_position import DeltaPosition
-from constants import DELTA_POSITION, KEY_PREDICTED, KEY_R2, KEY_RESIDUALS
+from constants import KEY_DELTA_POSITION, KEY_PREDICTED, KEY_R2, KEY_RESIDUALS
 
 
 class MinVarDelta(DeltaPosition):
@@ -178,12 +178,11 @@ class MinVarDelta(DeltaPosition):
         residuals: np.ndarray = self.y - y_pred
         r2: float = r2_score(self.y, y_pred)
 
-        y_pred_combined = np.stack([y_pred_power, y_pred_coal], axis=1)
-        y_pred_xr: xr.DataArray = xr.DataArray(
-            y_pred_combined,
+        delta_positions: xr.DataArray = xr.DataArray(
+            np.stack([y_pred_power, y_pred_coal], axis=1),
             dims=[SIMULATION_PATH, ASSET],
             coords={ASSET: [POWER, COAL], SIMULATION_PATH: np.arange(self.n_samples)},
-            name=DELTA_POSITION,
+            name=KEY_DELTA_POSITION,
         )
 
-        return {KEY_PREDICTED: y_pred_xr, KEY_RESIDUALS: residuals, KEY_R2: r2}
+        return {KEY_DELTA_POSITION: delta_positions,KEY_PREDICTED:  y_pred, KEY_RESIDUALS: residuals, KEY_R2: r2}

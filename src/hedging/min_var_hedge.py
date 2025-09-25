@@ -15,8 +15,7 @@ from regression.polynomial_base_builder import PolynomialBasisBuilder
 
 from valuation.power_plant.power_plant import PowerPlant
 
-from constants import POWER, COAL, KEY_R2, KEY_PREDICTED, ASSET, DELTA_POSITION
-
+from constants import POWER, COAL, KEY_R2, KEY_PREDICTED, ASSET, DELTA_POSITION, KEY_DELTA_POSITION
 
 TDelta = TypeVar("TDelta", bound=DeltaPosition)
 
@@ -286,7 +285,7 @@ class MinVarHedge:
 
         # Perform regression
         results = delta_position_calculator.compute()
-        delta_positions = results[KEY_PREDICTED]
+        delta_positions = results[KEY_DELTA_POSITION]
         r2_score = results[KEY_R2]
 
         # --- Validation ---------------------------------------------------------

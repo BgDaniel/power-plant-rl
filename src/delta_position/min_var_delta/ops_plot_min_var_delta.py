@@ -4,7 +4,7 @@ from matplotlib import cm
 from scipy.interpolate import griddata
 import xarray as xr
 
-from constants import ASSET, POWER, COAL, SIMULATION_PATH
+from constants import ASSET, POWER, COAL, SIMULATION_PATH, KEY_PREDICTED, SPREAD
 from delta_position.min_var_delta.min_var_delta import MinVarDelta
 
 
@@ -55,9 +55,9 @@ class OpsPlotMinVarDelta:
              None
          """
         feature_combos = [
-            (self.model.x["POWER"], self.model.x["COAL"], "POWER", "COAL"),
-            (self.model.x["POWER"], self.model.x["SPREAD"], "POWER", "SPREAD"),
-            (self.model.x["COAL"], self.model.x["SPREAD"], "COAL", "SPREAD"),
+            (self.model.x[POWER], self.model.x[COAL], POWER, COAL),
+            (self.model.x[POWER], self.model.x[SPREAD], POWER, SPREAD),
+            (self.model.x[COAL], self.model.x[SPREAD], COAL, SPREAD),
         ]
 
         for x1_vals, x2_vals, xlabel, ylabel in feature_combos:
@@ -117,9 +117,9 @@ class OpsPlotMinVarDelta:
             None
         """
         feature_combos = [
-            (self.model.x["POWER"], self.model.x["COAL"], "POWER", "COAL"),
-            (self.model.x["POWER"], self.model.x["SPREAD"], "POWER", "SPREAD"),
-            (self.model.x["COAL"], self.model.x["SPREAD"], "COAL", "SPREAD"),
+            (self.model.x[POWER], self.model.x[COAL], POWER, COAL),
+            (self.model.x[POWER], self.model.x[SPREAD], POWER, SPREAD),
+            (self.model.x[COAL], self.model.x[SPREAD], COAL, SPREAD),
         ]
 
         for x1_vals, x2_vals, xlabel, ylabel in feature_combos:
@@ -162,52 +162,55 @@ if __name__ == "__main__":
     fwd_power0 = 70.0
     fwd_coal0 = 95.0
 
-    # --- Synthetic forward prices ---
+    # Forward prices (as NumPy arrays)
     x_fwd_power = fwd_power0 * np.random.rand(n_samples)
     x_fwd_coal = fwd_coal0 * np.random.rand(n_samples)
-    x_spread = x_fwd_power - 0.9 * x_fwd_coal
+    x_spread = x_fwd_power - 0.9 * x_fwd_coal  # optional extra feature
 
-    # --- True target with noise ---
+    # True target with noise
     y_true = (
-        0.5 * x_fwd_power ** 2
-        + np.sin(x_fwd_coal)
-        + 0.3 * x_fwd_power * x_fwd_coal
-        + np.random.normal(0, 1, n_samples)
+            0.5 * x_fwd_power ** 2
+            + np.sin(x_fwd_coal)
+            + 0.3 * x_fwd_power * x_fwd_coal
+            + np.random.normal(0, 1, n_samples)
     )
 
-    # -----------------------------------------------------------
-    # 1) Pack the features into an xarray.DataArray
-    #    dims = ("sample", "feature")
-    # -----------------------------------------------------------
+    # Use SIMULATION_PATH constant for the dimension name
+    sim_coord = xr.DataArray(np.arange(n_samples), dims=[SIMULATION_PATH], name=SIMULATION_PATH)
+
+    power_fwd = xr.DataArray(
+        x_fwd_power,
+        dims=[SIMULATION_PATH],
+        coords={SIMULATION_PATH: sim_coord},
+        name=POWER,
+    )
+
+    coal_fwd = xr.DataArray(
+        x_fwd_coal,
+        dims=[SIMULATION_PATH],
+        coords={SIMULATION_PATH: sim_coord},
+        name=COAL,
+    )
+
+    # Concatenate along ASSET dimension
     fwds = xr.concat(
-        [x_fwd_power, x_fwd_coal],
-        dim=xr.DataArray([POWER, COAL], dims=[ASSET])
+        [power_fwd, coal_fwd],
+        dim=xr.DataArray([POWER, COAL], dims=[ASSET], name=ASSET),
     )
 
-    # Same shape for beta: here we use ones as placeholder hedge weights
     beta = xr.DataArray(
-        np.ones((n_samples, 1)),
+        np.ones((n_samples, fwds.sizes[ASSET])),
         dims=(SIMULATION_PATH, ASSET),
-        coords={
-            SIMULATION_PATH: fwds.coords[SIMULATION_PATH],
-            ASSET: fwds.coords[ASSET],
-        },
+        coords={SIMULATION_PATH: fwds[SIMULATION_PATH], ASSET: fwds[ASSET]},
     )
 
-    # -----------------------------------------------------------
-    # 2) Fit the MinVarDelta model
-    # -----------------------------------------------------------
     min_var_delta = MinVarDelta(
         fwds=fwds,
         y=y_true,
         beta=beta,
-        efficiency=0.95
+        efficiency=0.95,
     )
 
-    y_pred = min_var_delta.compute()
+    y_pred = min_var_delta.compute()[KEY_PREDICTED]
 
-    OpsPlotMinVarDelta(min_var_delta).plot(
-        y_true=y_true,
-        y_pred=y_pred
-    )
-
+    OpsPlotMinVarDelta(min_var_delta).plot(y_true=y_true, y_pred=y_pred)

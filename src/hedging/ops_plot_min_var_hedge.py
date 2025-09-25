@@ -2,10 +2,12 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from sklearn.metrics import r2_score
+from typing_extensions import Any
+
+from delta_position.min_var_delta.min_var_delta import MinVarDelta
 from hedging.min_var_hedge import MinVarHedge
 
-from constants import POWER, COAL, ASSET, DELIVERY_START
-
+from constants import POWER, COAL, ASSET, DELIVERY_START, SIMULATION_PATH
 
 
 class OpsPlotMinVarHedge:
@@ -35,7 +37,7 @@ class OpsPlotMinVarHedge:
         in a two-row plot, with each delivery start date shown as a separate line.
         """
         assets = [POWER, COAL]
-        fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+        fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=False)
 
         for ax, asset in zip(axes, assets):
             for delivery_start in self.hedge._delivery_start_dates:
@@ -47,12 +49,10 @@ class OpsPlotMinVarHedge:
                 delivery_ts = pd.Timestamp(delivery_start)
                 ax.plot(
                     self.hedge._simulation_days,
-                    r2_values,
-                    label=f"Delivery {delivery_ts.strftime('%Y-%m')}"
+                    r2_values
                 )
 
             ax.set_title(f"{asset}")  # Subplot title: asset
-            ax.set_ylabel("R² Value")
             ax.grid(True)
             ax.set_ylim(0.0, 1.1)
             ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
@@ -84,16 +84,16 @@ class OpsPlotMinVarHedge:
         # --------------------------
         # Upper plot: histogram
         # --------------------------
+        total_cashflows_asset = cashflows_from_asset.sum(axis=0)
         total_cashflows_hedge = cashflows_from_hedge.sum(axis=0)
         total_residuals = residuals.sum(axis=0)
 
         fig, axes = plt.subplots(2, 1, figsize=(14, 10), gridspec_kw={'height_ratios': [1, 2]})
 
-        axes[0].hist(total_cashflows_hedge, bins=50, alpha=0.6, label="Total Hedge Cashflows", color='blue')
-        axes[0].hist(total_residuals, bins=50, alpha=0.6, label="Total Residuals", color='red')
-        axes[0].set_title("Histogram: Total Cashflows vs Residuals")
-        axes[0].set_xlabel("Sum of Cashflows")
-        axes[0].set_ylabel("Frequency")
+        axes[0].hist(total_cashflows_hedge, bins=80, alpha=0.6, label="Hedge", color='blue')
+        axes[0].hist(total_residuals, bins=80, alpha=0.6, label="Residuals", color='red')
+        axes[0].hist(total_cashflows_asset, bins=80, alpha=0.6, label="Asset", color='green')
+        axes[0].set_title("Histogram: Total Cashflows")
         axes[0].legend()
         axes[0].grid(True)
 
@@ -114,16 +114,17 @@ class OpsPlotMinVarHedge:
             axis=1
         )
 
-        ax1.plot(var_hedge, label="Variance: Hedge Cashflows", lw=1, color='blue')
-        ax1.plot(var_asset, label="Variance: Asset Cashflows", lw=1, color='green')
-        ax1.plot(var_residuals, label="Variance: Residual Cashflows", lw=1, color='red')
+        ax1.plot(var_hedge, label="Hedge", lw=1, color='blue')
+        ax1.plot(var_residuals, label="Residual", lw=1, color='red')
+        ax1.plot(var_asset, label="Asset", lw=1, color='green')
 
-        ax2.plot(r2_rows, label="Row-wise R²", lw=1, linestyle='--', color='black')
+
+        ax2.plot(r2_rows, label="Row-wise R²", lw=1, linestyle='--', color='orange')
         ax2.set_ylim(0.0, 1.1)
 
-        ax1.set_xlabel("Simulation Day / Path")
+        ax1.set_xlabel("Simulation Day")
 
-        ax1.set_title("Row-wise Variance and R² Over Simulation Days")
+        ax1.set_title("Variance and R² Over Simulation Days")
         ax1.grid(True)
 
         # Combine legends
