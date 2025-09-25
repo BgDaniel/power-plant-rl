@@ -96,7 +96,7 @@ class MinVarHedge:
             ASSET: [POWER, COAL],
         }
 
-        self._deltas: xr.DataArray = xr.DataArray(
+        self.deltas: xr.DataArray = xr.DataArray(
             np.zeros((self._n_sims, self._n_steps, self._n_front_months, 2)),
             dims=[SIMULATION_PATH, SIMULATION_DAY, DELIVERY_START, ASSET],
             coords=coords,
@@ -173,7 +173,7 @@ class MinVarHedge:
             bom_maturity_day = bom_delivery_start_day + pd.Timedelta(days=-1)
 
             for asset in [POWER, COAL]:
-                bom_delta_asset = self._deltas.sel(
+                bom_delta_asset = self.deltas.sel(
                     {
                         DELIVERY_START: bom_delivery_start_day,
                         ASSET: asset,
@@ -236,7 +236,7 @@ class MinVarHedge:
         """
         for delivery_start in front_months_start_dates:
 
-            self._deltas.loc[
+            self.deltas.loc[
                 {
                     SIMULATION_DAY: asset_day,
                     DELIVERY_START: delivery_start,
@@ -339,7 +339,7 @@ class MinVarHedge:
 
         # --- Save deltas (xarray) ---
         deltas_path = os.path.join(run_folder, "deltas.nc")
-        self._deltas.to_netcdf(deltas_path)
+        self.deltas.to_netcdf(deltas_path)
         print(f"Deltas saved to: {deltas_path}")
 
         # --- Save cashflows (pandas DataFrame) ---
