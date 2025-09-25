@@ -19,9 +19,7 @@ from constants import (
     POWER,
     COAL,
     KEY_R2,
-    KEY_PREDICTED,
     ASSET,
-    DELTA_POSITION,
     KEY_DELTA_POSITION,
 )
 
