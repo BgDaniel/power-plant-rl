@@ -17,9 +17,7 @@ as_of_date = pd.Timestamp("2025-09-30")
 simulation_start = as_of_date
 simulation_end = pd.Timestamp("2026-12-30")
 
-simulation_days = pd.date_range(
-    start=simulation_start, end=simulation_end, freq="D"
-)
+simulation_days = pd.date_range(start=simulation_start, end=simulation_end, freq="D")
 
 spread_model = SpreadModel(
     as_of_date, simulation_days, config_path=config_path_spread_model
@@ -79,8 +77,8 @@ power_plant = PowerPlant(
 power_plant.optimize()
 
 ops_plot_power_plant = OpsPlotPowerPlant(power_plant)
-#ops_plot_power_plant.plot_r2()
-#ops_plot_power_plant.plot_simulation_summary(path_index=0)
+# ops_plot_power_plant.plot_r2()
+# ops_plot_power_plant.plot_simulation_summary(path_index=0)
 
 min_var_hedge = MinVarHedge(
     n_sims=n_sims,
@@ -93,14 +91,10 @@ min_var_hedge = MinVarHedge(
 )
 
 min_var_hedge.hedge()
-#min_var_hedge.save_results(run_name='hedge_run_oct_25-oct26')
+# min_var_hedge.save_results(run_name='hedge_run_oct_25-oct26')
 
 min_var_hedge.roll_out_cashflows()
 
 ops_plot_min_var_hedge = OpsPlotMinVarHedge(min_var_hedge)
 ops_plot_min_var_hedge.plot_r2()
 ops_plot_min_var_hedge.plot_hedge_effectiveness(power_plant.cashflows)
-
-
-
-

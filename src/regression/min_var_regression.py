@@ -1,17 +1,15 @@
 from itertools import combinations
-import matplotlib.pyplot as plt
-import numpy as np
 from numpy.polynomial.legendre import legvander
 from numpy.polynomial.chebyshev import chebvander
 from sklearn.metrics import r2_score
-from typing import ClassVar, Dict, List, TypeVar
+from typing import ClassVar, Dict
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import numpy as np
 import xarray as xr
 from scipy.interpolate import griddata
 
-from delta_position.delta_position import DeltaPosition
+
 from market_simulation.constants import SIMULATION_PATH
 
 
@@ -19,11 +17,10 @@ from regression.regression_helpers import KEY_RESIDUALS, KEY_PREDICTED, KEY_R2
 from valuation.power_plant.power_plant import POWER, COAL, SPREAD
 
 
-SPREAD_TANH = 'SPREAD_TANH'
-ASSET = 'ASSET'
-DELTA_POSITION = 'DELTA_POSITION'
-SPREAD_IND ='SPREAD_IND'
-
+SPREAD_TANH = "SPREAD_TANH"
+ASSET = "ASSET"
+DELTA_POSITION = "DELTA_POSITION"
+SPREAD_IND = "SPREAD_IND"
 
 
 class MinVarPolynomialRegression:
@@ -71,8 +68,8 @@ class MinVarPolynomialRegression:
             POWER: x_fwd_power,
             COAL: x_fwd_coal,
             SPREAD: x_spread,
-            #SPREAD_TANH: np.tanh(x_spread)
-            #SPREAD_IND: (x_spread > 0).astype(float)
+            # SPREAD_TANH: np.tanh(x_spread)
+            # SPREAD_IND: (x_spread > 0).astype(float)
         }
 
         self.y = y
@@ -115,7 +112,7 @@ class MinVarPolynomialRegression:
 
         if self.poly_type == self.POLY_STANDARD:
             for d in range(1, self.degree + 1):
-                features[f"{feature}^{d}"] = values ** d
+                features[f"{feature}^{d}"] = values**d
 
         elif self.poly_type == self.POLY_LEGENDRE:
             full = legvander(values, self.degree)
@@ -199,7 +196,7 @@ class MinVarPolynomialRegression:
         feature_combos = [
             (self.x["POWER"], self.x["COAL"], "POWER", "COAL"),
             (self.x["POWER"], self.x["SPREAD"], "POWER", "SPREAD"),
-            (self.x["COAL"], self.x["SPREAD"], "COAL", "SPREAD")
+            (self.x["COAL"], self.x["SPREAD"], "COAL", "SPREAD"),
         ]
 
         n_bins = 10  # 10% quantiles
@@ -210,12 +207,30 @@ class MinVarPolynomialRegression:
             # -----------------------
             # Row 1 Left: 3D scatter
             # -----------------------
-            ax3d = fig.add_subplot(2, 3, 1, projection='3d')
+            ax3d = fig.add_subplot(2, 3, 1, projection="3d")
             # Plot true y as circles first
-            ax3d.scatter(x1_vals, x2_vals, y_true, c='r', s=20, alpha=0.9, marker='o', label="True y")
+            ax3d.scatter(
+                x1_vals,
+                x2_vals,
+                y_true,
+                c="r",
+                s=20,
+                alpha=0.9,
+                marker="o",
+                label="True y",
+            )
 
             # Plot predicted y as crosses on top
-            ax3d.scatter(x1_vals, x2_vals, y_pred, c='b', s=20, alpha=0.6, marker='x', label="Predicted y")
+            ax3d.scatter(
+                x1_vals,
+                x2_vals,
+                y_pred,
+                c="b",
+                s=20,
+                alpha=0.6,
+                marker="x",
+                label="Predicted y",
+            )
             ax3d.set_xlabel(xlabel)
             ax3d.set_ylabel(ylabel)
             ax3d.set_zlabel("y")
@@ -229,11 +244,17 @@ class MinVarPolynomialRegression:
             yi = np.linspace(x2_vals.min(), x2_vals.max(), 50)
             Xi, Yi = np.meshgrid(xi, yi)
             residuals_abs = np.abs(y_true - y_pred)
-            residual_grid = griddata((x1_vals, x2_vals), residuals_abs, (Xi, Yi), method='linear')
+            residual_grid = griddata(
+                (x1_vals, x2_vals), residuals_abs, (Xi, Yi), method="linear"
+            )
 
-            im = axes[0, 1].imshow(residual_grid, extent=(x1_vals.min(), x1_vals.max(),
-                                                          x2_vals.min(), x2_vals.max()),
-                                   origin='lower', aspect='auto', cmap=cm.viridis)
+            im = axes[0, 1].imshow(
+                residual_grid,
+                extent=(x1_vals.min(), x1_vals.max(), x2_vals.min(), x2_vals.max()),
+                origin="lower",
+                aspect="auto",
+                cmap=cm.viridis,
+            )
             axes[0, 1].set_xlabel(xlabel)
             axes[0, 1].set_ylabel(ylabel)
             axes[0, 1].set_title("Residuals |y_true - y_pred|")
@@ -242,8 +263,8 @@ class MinVarPolynomialRegression:
             # -----------------------
             # Row 1 Right: overlapping histograms of y_true and y_pred
             # -----------------------
-            axes[0, 2].hist(y_true, bins=30, alpha=0.5, label='y_true', color='r')
-            axes[0, 2].hist(y_pred, bins=30, alpha=0.5, label='y_pred', color='b')
+            axes[0, 2].hist(y_true, bins=30, alpha=0.5, label="y_true", color="r")
+            axes[0, 2].hist(y_pred, bins=30, alpha=0.5, label="y_pred", color="b")
             axes[0, 2].set_title("Distribution: y_true vs y_pred")
             axes[0, 2].set_xlabel("y")
             axes[0, 2].set_ylabel("Frequency")
@@ -264,9 +285,11 @@ class MinVarPolynomialRegression:
                 if np.any(mask):
                     base_color = colors[i]
                     lighter_color = list(base_color[:3]) + [0.6]  # lighter line
-                    axes[1, 0].scatter(x2_vals[mask], y_true[mask], color=base_color, s=20, alpha=0.8)
+                    axes[1, 0].scatter(
+                        x2_vals[mask], y_true[mask], color=base_color, s=20, alpha=0.8
+                    )
                     sorted_idx = np.argsort(x2_vals[mask])
-                    #axes[1, 0].plot(x2_vals[mask][sorted_idx], y_pred[mask][sorted_idx],
+                    # axes[1, 0].plot(x2_vals[mask][sorted_idx], y_pred[mask][sorted_idx],
                     #                color=lighter_color, lw=2)
             axes[1, 0].set_xlabel(ylabel)  # plotting against the "other" dimension
             axes[1, 0].set_ylabel("y")
@@ -281,9 +304,11 @@ class MinVarPolynomialRegression:
                 if np.any(mask):
                     base_color = colors[i]
                     lighter_color = list(base_color[:3]) + [0.6]
-                    axes[1, 1].scatter(x1_vals[mask], y_true[mask], color=base_color, s=20, alpha=0.8)
+                    axes[1, 1].scatter(
+                        x1_vals[mask], y_true[mask], color=base_color, s=20, alpha=0.8
+                    )
                     sorted_idx = np.argsort(x1_vals[mask])
-                    #axes[1, 1].plot(x1_vals[mask][sorted_idx], y_pred[mask][sorted_idx],
+                    # axes[1, 1].plot(x1_vals[mask][sorted_idx], y_pred[mask][sorted_idx],
                     #                color=lighter_color, lw=2)
             axes[1, 1].set_xlabel(xlabel)
             axes[1, 1].set_ylabel("y")
@@ -293,7 +318,7 @@ class MinVarPolynomialRegression:
             # Row 2 Right: histogram of residuals
             # -----------------------
             residuals = y_true - y_pred
-            axes[1, 2].hist(residuals, bins=30, color='purple', alpha=0.7)
+            axes[1, 2].hist(residuals, bins=30, color="purple", alpha=0.7)
             axes[1, 2].set_title("Residual distribution")
             axes[1, 2].set_xlabel("y_true - y_pred")
             axes[1, 2].set_ylabel("Frequency")
@@ -333,7 +358,9 @@ class MinVarPolynomialRegression:
         # -----------------------------
         # Step 2: Stack horizontally for extended regression
         # -----------------------------
-        design_matrix_combined = np.hstack([design_matrix_power, design_matrix_coal])  # n x 2*features
+        design_matrix_combined = np.hstack(
+            [design_matrix_power, design_matrix_coal]
+        )  # n x 2*features
 
         # -----------------------------
         # Step 3: Solve pseudo-inverse
@@ -371,24 +398,18 @@ class MinVarPolynomialRegression:
         # -----------------------------
         # Step 8: Return results
         # -----------------------------
-        y_pred_combined = np.stack([y_pred_power, y_pred_coal], axis=1)  # shape: (n_samples, 2)
+        y_pred_combined = np.stack(
+            [y_pred_power, y_pred_coal], axis=1
+        )  # shape: (n_samples, 2)
 
         y_pred = xr.DataArray(
-                y_pred_combined,
-                dims=[SIMULATION_PATH, ASSET],
-                coords={
-                    ASSET: [POWER, COAL],
-                    SIMULATION_PATH: np.arange(self.n_samples)
-                },
-                name=DELTA_POSITION
-            )
+            y_pred_combined,
+            dims=[SIMULATION_PATH, ASSET],
+            coords={ASSET: [POWER, COAL], SIMULATION_PATH: np.arange(self.n_samples)},
+            name=DELTA_POSITION,
+        )
 
-
-        return {
-            KEY_PREDICTED: y_pred,
-            KEY_RESIDUALS: residuals,
-            KEY_R2: r2
-        }
+        return {KEY_PREDICTED: y_pred, KEY_RESIDUALS: residuals, KEY_R2: r2}
 
 
 if __name__ == "__main__":
@@ -416,14 +437,13 @@ if __name__ == "__main__":
     x_fwd_coal += jitter
     x_spread += jitter
 
-
     # More complicated target function
     def f(x1, x2, s):
-        return 0.5 * x1 ** 2 + np.sin(x2) + 0.2 * np.tanh(s) + 0.3 * x1 * x2
+        return 0.5 * x1**2 + np.sin(x2) + 0.2 * np.tanh(s) + 0.3 * x1 * x2
 
     # Generate target cashflows with some noise
     noise = np.random.normal(0, 1.0, n_samples)
-    y = f(x_fwd_power,x_fwd_coal, x_spread) + noise
+    y = f(x_fwd_power, x_fwd_coal, x_spread) + noise
 
     # Hedge scaling factor
     beta_power = np.ones(n_samples)
@@ -442,7 +462,7 @@ if __name__ == "__main__":
         beta_coal=beta_coal,
         degree=2,
         poly_type=MinVarPolynomialRegression.POLY_STANDARD,
-        init_c=1.0
+        init_c=1.0,
     )
 
     # -----------------------------

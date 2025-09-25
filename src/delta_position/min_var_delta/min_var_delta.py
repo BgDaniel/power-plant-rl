@@ -70,6 +70,7 @@ class MinVarDelta(DeltaPosition):
         Returns:
             None
         """
+
         def scale(x: np.ndarray) -> np.ndarray:
             return 2 * (x - x.min()) / (x.max() - x.min()) - 1.0
 
@@ -92,7 +93,7 @@ class MinVarDelta(DeltaPosition):
         features: Dict[str, np.ndarray] = {}
         if self.poly_type == self.POLY_STANDARD:
             for d in range(1, self.degree + 1):
-                features[f"{feature}^{d}"] = values ** d
+                features[f"{feature}^{d}"] = values**d
         elif self.poly_type == self.POLY_LEGENDRE:
             full = legvander(values, self.degree)
             for d in range(1, self.degree + 1):
@@ -185,4 +186,9 @@ class MinVarDelta(DeltaPosition):
             name=KEY_DELTA_POSITION,
         )
 
-        return {KEY_DELTA_POSITION: delta_positions,KEY_PREDICTED:  y_pred, KEY_RESIDUALS: residuals, KEY_R2: r2}
+        return {
+            KEY_DELTA_POSITION: delta_positions,
+            KEY_PREDICTED: y_pred,
+            KEY_RESIDUALS: residuals,
+            KEY_R2: r2,
+        }

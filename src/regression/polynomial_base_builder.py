@@ -121,10 +121,10 @@ class PolynomialBasisBuilder:
         pca.fit(x)
 
         # Compute feature importance as sum of squared loadings across top n_components
-        feature_importance = np.sum(pca.components_[:self.n_components] ** 2, axis=0)
+        feature_importance = np.sum(pca.components_[: self.n_components] ** 2, axis=0)
 
         # Select indices of top n_components most important features
-        top_indices = np.argsort(feature_importance)[-self.n_components:]
+        top_indices = np.argsort(feature_importance)[-self.n_components :]
 
         # Return only the most relevant features
         return x[:, top_indices]

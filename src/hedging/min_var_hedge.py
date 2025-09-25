@@ -15,7 +15,15 @@ from regression.polynomial_base_builder import PolynomialBasisBuilder
 
 from valuation.power_plant.power_plant import PowerPlant
 
-from constants import POWER, COAL, KEY_R2, KEY_PREDICTED, ASSET, DELTA_POSITION, KEY_DELTA_POSITION
+from constants import (
+    POWER,
+    COAL,
+    KEY_R2,
+    KEY_PREDICTED,
+    ASSET,
+    DELTA_POSITION,
+    KEY_DELTA_POSITION,
+)
 
 TDelta = TypeVar("TDelta", bound=DeltaPosition)
 
@@ -32,7 +40,7 @@ class MinVarHedge:
         fwds_coal: xr.DataArray,  # (n_sims, n_days, n_delivery_months)
         polynomial_type: str = PolynomialBasisBuilder.POLY_LEGENDRE,
         polynomial_degree: int = 4,
-        delta_position_type: TDelta = MinVarDelta
+        delta_position_type: TDelta = MinVarDelta,
     ):
         self._n_sims = n_sims
         self._simulation_days = simulation_days
@@ -50,26 +58,26 @@ class MinVarHedge:
         self._spots_coal = spots_coal
 
         self._fwds = xr.concat(
-            [fwds_power, fwds_coal],
-            dim=xr.DataArray([POWER, COAL], dims=[ASSET])
+            [fwds_power, fwds_coal], dim=xr.DataArray([POWER, COAL], dims=[ASSET])
         )
 
         self._spots = {POWER: self._spots_power, COAL: self._spots_coal}
 
         self._spots = xr.DataArray(
             np.stack([spots_power.values, spots_coal.values], axis=0),
-        dims=[ASSET, SIMULATION_DAY, SIMULATION_PATH],
-        coords={
-            ASSET: [POWER, COAL],
-            SIMULATION_DAY: spots_power.index,
-            SIMULATION_PATH: spots_power.columns,
-        })
+            dims=[ASSET, SIMULATION_DAY, SIMULATION_PATH],
+            coords={
+                ASSET: [POWER, COAL],
+                SIMULATION_DAY: spots_power.index,
+                SIMULATION_PATH: spots_power.columns,
+            },
+        )
 
         delivery_start_dates_power = fwds_power.coords[DELIVERY_START].values
         delivery_start_dates_coal = fwds_coal.coords[DELIVERY_START].values
 
         # Check equality and raise error if they differ
-        if not np.array_equal(delivery_start_dates_power , delivery_start_dates_coal):
+        if not np.array_equal(delivery_start_dates_power, delivery_start_dates_coal):
             raise ValueError(
                 "DELIVERY_START coordinates of fwds_power and fwds_coal are not equal!"
             )
@@ -167,11 +175,13 @@ class MinVarHedge:
             bom_maturity_day = bom_delivery_start_day + pd.Timedelta(days=-1)
 
             for asset in [POWER, COAL]:
-                bom_delta_asset = self._deltas.sel({
-                    DELIVERY_START: bom_delivery_start_day,
-                    ASSET: asset,
-                    SIMULATION_DAY: bom_maturity_day
-                })
+                bom_delta_asset = self._deltas.sel(
+                    {
+                        DELIVERY_START: bom_delivery_start_day,
+                        ASSET: asset,
+                        SIMULATION_DAY: bom_maturity_day,
+                    }
+                )
 
                 spots = self._spots.sel({SIMULATION_DAY: asset_day, ASSET: asset})
 
@@ -201,8 +211,9 @@ class MinVarHedge:
         start = pd.Timestamp(simulation_day) + pd.Timedelta(days=1)
         end = self._asset_days[-1]  # last asset day
 
-        mask = (self._delivery_start_dates >= start) & \
-               (self._delivery_start_dates <= end)
+        mask = (self._delivery_start_dates >= start) & (
+            self._delivery_start_dates <= end
+        )
 
         return self._delivery_start_dates[mask]
 
@@ -232,15 +243,13 @@ class MinVarHedge:
                     SIMULATION_DAY: asset_day,
                     DELIVERY_START: delivery_start,
                 }
-            ] = self._hedge_front_month(
-                asset_day, delivery_start
-            )
+            ] = self._hedge_front_month(asset_day, delivery_start)
 
     def _hedge_front_month(
-            self,
-            asset_day: pd.Timestamp,
-            delivery_start: pd.Timestamp,
-            r2_threshold: float = 0.0
+        self,
+        asset_day: pd.Timestamp,
+        delivery_start: pd.Timestamp,
+        r2_threshold: float = 0.0,
     ) -> np.ndarray:
         """
         Compute hedge delta for a single delivery month using polynomial regression.
@@ -270,18 +279,23 @@ class MinVarHedge:
 
         # Asset days sometimes could be only partially covered by the front month days
         # at the end of the asset computatin horizom
-        asset_days_in_front_month = self._cashflows.index.intersection(days_in_front_month)
+        asset_days_in_front_month = self._cashflows.index.intersection(
+            days_in_front_month
+        )
 
         y = self._cashflows.loc[asset_days_in_front_month].values.sum(axis=0)
 
-        beta = self._spots.sel(SIMULATION_DAY=days_in_front_month).sum(dim=SIMULATION_DAY)
+        beta = self._spots.sel(SIMULATION_DAY=days_in_front_month).sum(
+            dim=SIMULATION_DAY
+        )
 
-        fwds = self._fwds.sel({
-            DELIVERY_START: delivery_start, SIMULATION_DAY: asset_day
-        })
+        fwds = self._fwds.sel(
+            {DELIVERY_START: delivery_start, SIMULATION_DAY: asset_day}
+        )
 
-        delta_position_calculator = self._delta_position_type(fwds=fwds, y=y,
-                                                              beta=beta, efficiency=self._power_plant.efficiency)
+        delta_position_calculator = self._delta_position_type(
+            fwds=fwds, y=y, beta=beta, efficiency=self._power_plant.efficiency
+        )
 
         # Perform regression
         results = delta_position_calculator.compute()
@@ -290,7 +304,7 @@ class MinVarHedge:
 
         # --- Validation ---------------------------------------------------------
         # Check R² threshold
-        #if r2_score < r2_threshold:
+        # if r2_score < r2_threshold:
         #    delivery_month = pd.Timestamp(delivery_start).strftime("%Y-%m")
         #    raise ValueError(
         #        f"Regression R²={r2_score:.4f} below threshold {r2_threshold} "
@@ -336,4 +350,3 @@ class MinVarHedge:
         print(f"Cashflows saved to: {cashflows_path}")
 
         print(f"All results saved in folder: {run_folder}")
-

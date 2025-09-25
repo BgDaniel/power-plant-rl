@@ -4,7 +4,13 @@ from typing import Optional, Dict, ClassVar, List
 
 
 from regression.polynomial_base_builder import PolynomialBasisBuilder
-from regression.regression_helpers import KEY_PREDICTED, KEY_R2, KEY_RESIDUALS, check_degenerate_case, EPS
+from regression.regression_helpers import (
+    KEY_PREDICTED,
+    KEY_R2,
+    KEY_RESIDUALS,
+    check_degenerate_case,
+    EPS,
+)
 
 
 class PolynomialRegression:
@@ -86,10 +92,6 @@ class PolynomialRegression:
         r2 = self.model.score(self.x_poly, self.y)
 
         if ss_tot < EPS:  # target is constant
-            r2 = float('nan')
+            r2 = float("nan")
 
-        return {
-            KEY_PREDICTED: y_pred,
-            KEY_R2: r2,
-            KEY_RESIDUALS: residuals
-        }
+        return {KEY_PREDICTED: y_pred, KEY_R2: r2, KEY_RESIDUALS: residuals}

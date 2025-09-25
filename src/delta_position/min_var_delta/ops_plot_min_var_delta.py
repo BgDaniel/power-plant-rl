@@ -16,6 +16,7 @@ class OpsPlotMinVarDelta:
     1) 3D surfaces and residual heatmaps
     2) Binned scatter plots and residual histograms
     """
+
     def __init__(self, model: MinVarDelta) -> None:
         """
         Initialize the plotting wrapper.
@@ -44,16 +45,16 @@ class OpsPlotMinVarDelta:
 
     def _plot_surfaces(self, y_true: np.ndarray, y_pred: np.ndarray) -> None:
         """
-         Plot 3D scatter of predicted vs true values, residual heatmaps,
-         and histograms of true vs predicted distributions.
+        Plot 3D scatter of predicted vs true values, residual heatmaps,
+        and histograms of true vs predicted distributions.
 
-         Args:
-             y_true (np.ndarray): Array of true target values.
-             y_pred (np.ndarray): Array of predicted target values.
+        Args:
+            y_true (np.ndarray): Array of true target values.
+            y_pred (np.ndarray): Array of predicted target values.
 
-         Returns:
-             None
-         """
+        Returns:
+            None
+        """
         feature_combos = [
             (self.model.x[POWER], self.model.x[COAL], POWER, COAL),
             (self.model.x[POWER], self.model.x[SPREAD], POWER, SPREAD),
@@ -65,8 +66,26 @@ class OpsPlotMinVarDelta:
 
             # --- 3D scatter ---
             ax3d = fig.add_subplot(1, 3, 1, projection="3d")
-            ax3d.scatter(x1_vals, x2_vals, y_true, c="r", s=20, alpha=0.9, marker="o", label="True y")
-            ax3d.scatter(x1_vals, x2_vals, y_pred, c="b", s=20, alpha=0.6, marker="x", label="Pred y")
+            ax3d.scatter(
+                x1_vals,
+                x2_vals,
+                y_true,
+                c="r",
+                s=20,
+                alpha=0.9,
+                marker="o",
+                label="True y",
+            )
+            ax3d.scatter(
+                x1_vals,
+                x2_vals,
+                y_pred,
+                c="b",
+                s=20,
+                alpha=0.6,
+                marker="x",
+                label="Pred y",
+            )
             ax3d.set_xlabel(xlabel)
             ax3d.set_ylabel(ylabel)
             ax3d.set_zlabel("y")
@@ -78,7 +97,9 @@ class OpsPlotMinVarDelta:
             yi = np.linspace(x2_vals.min(), x2_vals.max(), 50)
             Xi, Yi = np.meshgrid(xi, yi)
             residuals_abs = np.abs(y_true - y_pred)
-            residual_grid = griddata((x1_vals, x2_vals), residuals_abs, (Xi, Yi), method="linear")
+            residual_grid = griddata(
+                (x1_vals, x2_vals), residuals_abs, (Xi, Yi), method="linear"
+            )
 
             im = axes[1].imshow(
                 residual_grid,
@@ -100,12 +121,18 @@ class OpsPlotMinVarDelta:
             axes[2].set_ylabel("Frequency")
             axes[2].legend()
 
-            print(f"[{xlabel}-{ylabel}] y_true range: {y_true.min():.1f}–{y_true.max():.1f}")
-            print(f"[{xlabel}-{ylabel}] y_pred range: {y_pred.min():.1f}–{y_pred.max():.1f}")
+            print(
+                f"[{xlabel}-{ylabel}] y_true range: {y_true.min():.1f}–{y_true.max():.1f}"
+            )
+            print(
+                f"[{xlabel}-{ylabel}] y_pred range: {y_pred.min():.1f}–{y_pred.max():.1f}"
+            )
 
             plt.show(block=True)
 
-    def _plot_binned_and_residuals(self, y_true: np.ndarray, y_pred: np.ndarray) -> None:
+    def _plot_binned_and_residuals(
+        self, y_true: np.ndarray, y_pred: np.ndarray
+    ) -> None:
         """
         Plot binned scatter plots along each feature and residual histograms.
 
@@ -131,7 +158,9 @@ class OpsPlotMinVarDelta:
             for i in [0, 25, 50, 75, 99]:
                 mask = (x1_vals >= bins_x1[i]) & (x1_vals < bins_x1[i + 1])
                 if np.any(mask):
-                    axes[0].scatter(x2_vals[mask], y_true[mask], color=colors[i], s=20, alpha=0.8)
+                    axes[0].scatter(
+                        x2_vals[mask], y_true[mask], color=colors[i], s=20, alpha=0.8
+                    )
             axes[0].set_xlabel(ylabel)
             axes[0].set_ylabel("y")
             axes[0].set_title(f"Binned along {xlabel} vs {ylabel}")
@@ -141,7 +170,9 @@ class OpsPlotMinVarDelta:
             for i in [0, 25, 50, 75, 99]:
                 mask = (x2_vals >= bins_x2[i]) & (x2_vals < bins_x2[i + 1])
                 if np.any(mask):
-                    axes[1].scatter(x1_vals[mask], y_true[mask], color=colors[i], s=20, alpha=0.8)
+                    axes[1].scatter(
+                        x1_vals[mask], y_true[mask], color=colors[i], s=20, alpha=0.8
+                    )
             axes[1].set_xlabel(xlabel)
             axes[1].set_ylabel("y")
             axes[1].set_title(f"Binned along {ylabel} vs {xlabel}")
@@ -169,14 +200,16 @@ if __name__ == "__main__":
 
     # True target with noise
     y_true = (
-            0.5 * x_fwd_power ** 2
-            + np.sin(x_fwd_coal)
-            + 0.3 * x_fwd_power * x_fwd_coal
-            + np.random.normal(0, 1, n_samples)
+        0.5 * x_fwd_power**2
+        + np.sin(x_fwd_coal)
+        + 0.3 * x_fwd_power * x_fwd_coal
+        + np.random.normal(0, 1, n_samples)
     )
 
     # Use SIMULATION_PATH constant for the dimension name
-    sim_coord = xr.DataArray(np.arange(n_samples), dims=[SIMULATION_PATH], name=SIMULATION_PATH)
+    sim_coord = xr.DataArray(
+        np.arange(n_samples), dims=[SIMULATION_PATH], name=SIMULATION_PATH
+    )
 
     power_fwd = xr.DataArray(
         x_fwd_power,

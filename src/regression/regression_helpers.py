@@ -31,7 +31,9 @@ def r2_score_manual(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return 1 - ss_res / ss_tot if ss_tot != 0 else 0.0
 
 
-def check_degenerate_case(x: np.ndarray, y: np.ndarray) -> Optional[Dict[str, np.ndarray]]:
+def check_degenerate_case(
+    x: np.ndarray, y: np.ndarray
+) -> Optional[Dict[str, np.ndarray]]:
     """
     Check if all features are nearly constant across samples.
 
@@ -56,9 +58,5 @@ def check_degenerate_case(x: np.ndarray, y: np.ndarray) -> Optional[Dict[str, np
     if np.all(x_range < EPS):
         y_pred = np.full_like(y, np.mean(y))
         residuals = y - y_pred
-        return {
-            KEY_PREDICTED: y_pred,
-            KEY_R2: 0.0,
-            KEY_RESIDUALS: residuals
-        }
+        return {KEY_PREDICTED: y_pred, KEY_R2: 0.0, KEY_RESIDUALS: residuals}
     return None

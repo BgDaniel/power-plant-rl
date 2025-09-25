@@ -47,10 +47,7 @@ class OpsPlotMinVarHedge:
                 ).values
                 # Ensure delivery_start is a pandas Timestamp for formatting
                 delivery_ts = pd.Timestamp(delivery_start)
-                ax.plot(
-                    self.hedge._simulation_days,
-                    r2_values
-                )
+                ax.plot(self.hedge._simulation_days, r2_values)
 
             ax.set_title(f"{asset}")  # Subplot title: asset
             ax.grid(True)
@@ -88,11 +85,19 @@ class OpsPlotMinVarHedge:
         total_cashflows_hedge = cashflows_from_hedge.sum(axis=0)
         total_residuals = residuals.sum(axis=0)
 
-        fig, axes = plt.subplots(2, 1, figsize=(14, 10), gridspec_kw={'height_ratios': [1, 2]})
+        fig, axes = plt.subplots(
+            2, 1, figsize=(14, 10), gridspec_kw={"height_ratios": [1, 2]}
+        )
 
-        axes[0].hist(total_cashflows_hedge, bins=80, alpha=0.6, label="Hedge", color='blue')
-        axes[0].hist(total_residuals, bins=80, alpha=0.6, label="Residuals", color='red')
-        axes[0].hist(total_cashflows_asset, bins=80, alpha=0.6, label="Asset", color='green')
+        axes[0].hist(
+            total_cashflows_hedge, bins=80, alpha=0.6, label="Hedge", color="blue"
+        )
+        axes[0].hist(
+            total_residuals, bins=80, alpha=0.6, label="Residuals", color="red"
+        )
+        axes[0].hist(
+            total_cashflows_asset, bins=80, alpha=0.6, label="Asset", color="green"
+        )
         axes[0].set_title("Histogram: Total Cashflows")
         axes[0].legend()
         axes[0].grid(True)
@@ -110,16 +115,14 @@ class OpsPlotMinVarHedge:
 
         # Row-wise R²
         r2_rows = cashflows_from_asset.apply(
-            lambda row: r2_score(row, cashflows_from_hedge.loc[row.name]),
-            axis=1
+            lambda row: r2_score(row, cashflows_from_hedge.loc[row.name]), axis=1
         )
 
-        ax1.plot(var_hedge, label="Hedge", lw=1, color='blue')
-        ax1.plot(var_residuals, label="Residual", lw=1, color='red')
-        ax1.plot(var_asset, label="Asset", lw=1, color='green')
+        ax1.plot(var_hedge, label="Hedge", lw=1, color="blue")
+        ax1.plot(var_residuals, label="Residual", lw=1, color="red")
+        ax1.plot(var_asset, label="Asset", lw=1, color="green")
 
-
-        ax2.plot(r2_rows, label="Row-wise R²", lw=1, linestyle='--', color='orange')
+        ax2.plot(r2_rows, label="Row-wise R²", lw=1, linestyle="--", color="orange")
         ax2.set_ylim(0.0, 1.1)
 
         ax1.set_xlabel("Simulation Day")
@@ -130,6 +133,6 @@ class OpsPlotMinVarHedge:
         # Combine legends
         lines_1, labels_1 = ax1.get_legend_handles_labels()
         lines_2, labels_2 = ax2.get_legend_handles_labels()
-        ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc='upper right')
+        ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc="upper right")
 
         plt.show(block=True)
