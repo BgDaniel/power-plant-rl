@@ -1,11 +1,7 @@
 import numpy as np
 from typing import Optional, Dict
 
-
-KEY_PREDICTED = "predicted"
-KEY_R2 = "r2"
-KEY_RESIDUALS = "residuals"
-KEY_CONDITION_NUMBER = "condition_number"
+from constants import KEY_RESIDUALS, KEY_PREDICTED, KEY_R2
 
 EPS = 1e-5
 
@@ -63,7 +59,6 @@ def check_degenerate_case(x: np.ndarray, y: np.ndarray) -> Optional[Dict[str, np
         return {
             KEY_PREDICTED: y_pred,
             KEY_R2: 0.0,
-            KEY_RESIDUALS: residuals,
-            KEY_CONDITION_NUMBER: np.nan,
+            KEY_RESIDUALS: residuals
         }
     return None

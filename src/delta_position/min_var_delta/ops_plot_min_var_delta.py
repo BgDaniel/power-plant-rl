@@ -4,37 +4,56 @@ from matplotlib import cm
 from scipy.interpolate import griddata
 import xarray as xr
 
+from constants import ASSET, POWER, COAL, SIMULATION_PATH
 from delta_position.min_var_delta.min_var_delta import MinVarDelta
-
-from constants import KEY_R2, KEY_PREDICTED
-
 
 
 class OpsPlotMinVarDelta:
     """
-    Wrapper around a MinVarDelta instance
-    providing dedicated plotting methods:
-      1) surface & diagnostics
-      2) residual/binned plots
+    Wrapper around a MinVarDelta instance that provides
+    dedicated plotting methods:
+
+    1) 3D surfaces and residual heatmaps
+    2) Binned scatter plots and residual histograms
     """
+    def __init__(self, model: MinVarDelta) -> None:
+        """
+        Initialize the plotting wrapper.
 
-    def __init__(self, model: MinVarDelta):
-        self.model = model  # trained MinVarDelta model
+        Args:
+            model (MinVarDelta): A trained MinVarDelta model
+                containing feature and prediction data.
+        """
+        self.model: MinVarDelta = model
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
     def plot(self, y_true: np.ndarray, y_pred: xr.DataArray) -> None:
         """
-        Master method: calls the two sub-plotting methods.
+        Master plotting method.
+
+        Calls the surface plotting and binned/residual plotting methods.
+
+        Args:
+            y_true (np.ndarray): Array of true target values.
+            y_pred (xr.DataArray): Predicted target values as an xarray.DataArray.
+
+        Returns:
+            None
         """
         self._plot_surfaces(y_true, y_pred)
         self._plot_binned_and_residuals(y_true, y_pred)
 
-    # ------------------------------------------------------------------
-    # First half: 3D scatter + heatmap + hist of y
-    # ------------------------------------------------------------------
     def _plot_surfaces(self, y_true: np.ndarray, y_pred: np.ndarray) -> None:
+        """
+         Plot 3D scatter of predicted vs true values, residual heatmaps,
+         and histograms of true vs predicted distributions.
+
+         Args:
+             y_true (np.ndarray): Array of true target values.
+             y_pred (np.ndarray): Array of predicted target values.
+
+         Returns:
+             None
+         """
         feature_combos = [
             (self.model.x["POWER"], self.model.x["COAL"], "POWER", "COAL"),
             (self.model.x["POWER"], self.model.x["SPREAD"], "POWER", "SPREAD"),
@@ -86,10 +105,17 @@ class OpsPlotMinVarDelta:
 
             plt.show(block=True)
 
-    # ------------------------------------------------------------------
-    # Second half: binned scatter + residual histogram
-    # ------------------------------------------------------------------
     def _plot_binned_and_residuals(self, y_true: np.ndarray, y_pred: np.ndarray) -> None:
+        """
+        Plot binned scatter plots along each feature and residual histograms.
+
+        Args:
+            y_true (np.ndarray): Array of true target values.
+            y_pred (np.ndarray): Array of predicted target values.
+
+        Returns:
+            None
+        """
         feature_combos = [
             (self.model.x["POWER"], self.model.x["COAL"], "POWER", "COAL"),
             (self.model.x["POWER"], self.model.x["SPREAD"], "POWER", "SPREAD"),
@@ -130,36 +156,58 @@ class OpsPlotMinVarDelta:
             plt.show(block=True)
 
 
-# ======================================================================
 if __name__ == "__main__":
     np.random.seed(42)
-    n_samples = 500
+    n_samples = 1000
     fwd_power0 = 70.0
     fwd_coal0 = 95.0
 
+    # --- Synthetic forward prices ---
     x_fwd_power = fwd_power0 * np.random.rand(n_samples)
     x_fwd_coal = fwd_coal0 * np.random.rand(n_samples)
     x_spread = x_fwd_power - 0.9 * x_fwd_coal
-    y = 0.5 * x_fwd_power ** 2 + np.sin(x_fwd_coal) + 0.3 * x_fwd_power * x_fwd_coal + np.random.normal(0, 1, n_samples)
 
-    beta_power = np.ones(n_samples)
-    beta_coal = np.ones(n_samples)
-
-    min_var_delta = MinVarDelta(
-        n_samples=n_samples,
-        x_fwd_power=x_fwd_power,
-        x_fwd_coal=x_fwd_coal,
-        x_spread=x_spread,
-        y=y,
-        beta_power=beta_power,
-        beta_coal=beta_coal,
-        degree=2,
-        poly_type=MinVarDelta.POLY_STANDARD
+    # --- True target with noise ---
+    y_true = (
+        0.5 * x_fwd_power ** 2
+        + np.sin(x_fwd_coal)
+        + 0.3 * x_fwd_power * x_fwd_coal
+        + np.random.normal(0, 1, n_samples)
     )
 
-    delta = min_var_delta.compute()
+    # -----------------------------------------------------------
+    # 1) Pack the features into an xarray.DataArray
+    #    dims = ("sample", "feature")
+    # -----------------------------------------------------------
+    fwds = xr.concat(
+        [x_fwd_power, x_fwd_coal],
+        dim=xr.DataArray([POWER, COAL], dims=[ASSET])
+    )
 
-    OpsPlotMinVarDelta(min_var_delta).plot(y_true=,y_pred=delta)
+    # Same shape for beta: here we use ones as placeholder hedge weights
+    beta = xr.DataArray(
+        np.ones((n_samples, 1)),
+        dims=(SIMULATION_PATH, ASSET),
+        coords={
+            SIMULATION_PATH: fwds.coords[SIMULATION_PATH],
+            ASSET: fwds.coords[ASSET],
+        },
+    )
 
-# Using the abstract interface
+    # -----------------------------------------------------------
+    # 2) Fit the MinVarDelta model
+    # -----------------------------------------------------------
+    min_var_delta = MinVarDelta(
+        fwds=fwds,
+        y=y_true,
+        beta=beta,
+        efficiency=0.95
+    )
+
+    y_pred = min_var_delta.compute()
+
+    OpsPlotMinVarDelta(min_var_delta).plot(
+        y_true=y_true,
+        y_pred=y_pred
+    )
 

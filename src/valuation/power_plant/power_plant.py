@@ -23,27 +23,12 @@ from regression.regression_helpers import KEY_R2, KEY_PREDICTED
 from regression.polynomial_base_builder import PolynomialBasisBuilder
 
 
+from constants import (POWER, COAL, SPREAD, DIM_SIMULATION_DAY, DIM_SIMULATION_PATH,
+DIM_OPERATIONAL_STATE, OPTIMAL_CONTROL, VALUE, CASHFLOWS, REGRESSED_VALUE,REGRESSION_RESULTS )
+
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
-
-# -----------------------
-# Dimension name constants
-# -----------------------
-DIM_SIMULATION_DAY = "simulation_day"
-DIM_SIMULATION_PATH = "simulation_path"
-DIM_OPERATIONAL_STATE = "operational_state"
-
-
-OPTIMAL_CONTROL = "optimal_control"
-VALUE = "value"
-CASHFLOWS = "cashflows"
-REGRESSED_VALUE = "regressed_value"
-REGRESSION_RESULTS = "regression_results"
-
-POWER = "POWER"
-COAL = "COAL"
-SPREAD = "SPREAD"
 
 
 class PowerPlant:

@@ -79,8 +79,8 @@ power_plant = PowerPlant(
 power_plant.optimize()
 
 ops_plot_power_plant = OpsPlotPowerPlant(power_plant)
-ops_plot_power_plant.plot_r2()
-ops_plot_power_plant.plot_simulation_summary(path_index=0)
+#ops_plot_power_plant.plot_r2()
+#ops_plot_power_plant.plot_simulation_summary(path_index=0)
 
 min_var_hedge = MinVarHedge(
     n_sims=n_sims,
@@ -93,7 +93,9 @@ min_var_hedge = MinVarHedge(
 )
 
 min_var_hedge.hedge()
-min_var_hedge.save_results(run_name='hedge_run_oct_25-oct26')
+#min_var_hedge.save_results(run_name='hedge_run_oct_25-oct26')
+
+min_var_hedge.roll_out_cashflows()
 
 ops_plot_min_var_hedge = OpsPlotMinVarHedge(min_var_hedge)
 ops_plot_min_var_hedge.plot_r2()

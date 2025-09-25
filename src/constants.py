@@ -19,3 +19,15 @@ DELTA_COAL = "DELTA_COAL"
 DELTA_POSITION = "DELTA_POSITION"
 
 DELIVERY_START = "DELIVERY_START"
+
+
+DIM_SIMULATION_DAY = "simulation_day"
+DIM_SIMULATION_PATH = "simulation_path"
+DIM_OPERATIONAL_STATE = "operational_state"
+
+
+OPTIMAL_CONTROL = "optimal_control"
+VALUE = "value"
+CASHFLOWS = "cashflows"
+REGRESSED_VALUE = "regressed_value"
+REGRESSION_RESULTS = "regression_results"
