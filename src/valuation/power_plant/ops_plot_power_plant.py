@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from valuation.power_plant.power_plant import PowerPlant
+from plot_helpers import plot_observables
 
 
 class OpsPlotPowerPlant:
@@ -76,9 +77,7 @@ class OpsPlotPowerPlant:
         plt.figure(figsize=(12, 5))
 
         for state in states:
-            r2_values = self.power_plant._r2_scores.sel(
-                operational_state=state
-            )
+            r2_values = self.power_plant._r2_scores.sel(operational_state=state)
             plt.plot(
                 r2_values,
                 label=state.name,  # Use enum name for legend
@@ -118,12 +117,6 @@ class OpsPlotPowerPlant:
             Index of the simulation path to overlay. If None, only aggregates are plotted.
         """
 
-        lower1, lower2 = confidence_levels
-
-        label_ci1 = f"{int(lower1 * 100)}% CI"
-        label_ci2 = f"{int(lower2 * 100)}% CI"
-
-        upper1, upper2 = 1 - lower1, 1 - lower2
         asset_days = self.power_plant.asset_days
 
         # Prepare figure with 4 rows
@@ -132,117 +125,42 @@ class OpsPlotPowerPlant:
             1,
             figsize=(8, 6),
             sharex=True,
-            gridspec_kw={"height_ratios": [1, 1, 1, 0.1]},  # fourth row is half height
+            gridspec_kw={"height_ratios": [1, 1, 1, 0.1]},
         )
 
         # --- Row 1: Values ---
-        values = self.power_plant.values
-
-        value_mean = values.mean(axis=1)
-        value_lower1 = np.percentile(values, lower1 * 100, axis=1)
-        value_upper1 = np.percentile(values, upper1 * 100, axis=1)
-        value_lower2 = np.percentile(values, lower2 * 100, axis=1)
-        value_upper2 = np.percentile(values, upper2 * 100, axis=1)
-
-        ax1 = axes[0]
-        ax1.plot(
-            asset_days, value_mean, lw=1.5, color="yellow", label="Mean", linestyle="--"
-        )
-        ax1.fill_between(
-            asset_days,
-            value_lower2,
-            value_upper2,
-            color="blue",
-            alpha=0.05,
-            label=label_ci2,
-        )
-        ax1.fill_between(
-            asset_days,
-            value_lower1,
-            value_upper1,
-            color="blue",
-            alpha=0.1,
-            label=label_ci1,
-        )
-
-        if path_index is not None:
-            ax1.plot(
-                asset_days,
-                values.iloc[:, path_index],
-                color="red",
-                lw=1,
-                label=f"Path {path_index}",
-            )
-
-        ax1.set_title("Asset Value")
-        ax1.grid(True)
-        ax1.legend(
-            loc="upper center",  # Position relative to bbox_to_anchor
-            bbox_to_anchor=(
-                0.5,
-                -0.15,
-            ),  # x=0.5 centers horizontally, y=-0.15 moves below the axes
-            fontsize="small",
-            markerscale=0.4,
-            ncol=4,  # Optional: spread legend items across multiple columns
+        plot_observables(
+            x=asset_days,
+            data=self.power_plant.values,
+            confidence_levels=confidence_levels,
+            path_index=path_index,
+            ax=axes[0],  # <-- plot directly into this Axes
+            title="Asset Value",
+            ylabel="Value",
+            show=False,
         )
 
         # --- Row 2: Cashflows ---
-        cashflows = (
-            self.power_plant.cashflows
-        )  # shape (n_days, n_paths) or (n_paths, n_days)
-
-        cash_mean = cashflows.mean(axis=1)
-        cash_lower1 = np.percentile(cashflows, lower1 * 100, axis=1)
-        cash_upper1 = np.percentile(cashflows, upper1 * 100, axis=1)
-        cash_lower2 = np.percentile(cashflows, lower2 * 100, axis=1)
-        cash_upper2 = np.percentile(cashflows, upper2 * 100, axis=1)
-
-        ax2 = axes[1]
-        ax2.plot(
-            asset_days, cash_mean, lw=1.5, color="yellow", label="Mean", linestyle="--"
-        )
-        ax2.fill_between(
-            asset_days,
-            cash_lower2,
-            cash_upper2,
-            color="blue",
-            alpha=0.05,
-            label=label_ci2,
-        )
-        ax2.fill_between(
-            asset_days,
-            cash_lower1,
-            cash_upper1,
-            color="blue",
-            alpha=0.1,
-            label=label_ci1,
-        )
-
-        if path_index is not None:
-            ax2.plot(
-                asset_days,
-                cashflows.iloc[:, path_index],
-                color="red",
-                lw=1,
-                label=f"Path {path_index}",
-            )
-
-        ax2.set_title("Cashlows")
-        ax2.grid(True)
-        ax2.legend(
-            loc="upper center",  # Position relative to bbox_to_anchor
-            bbox_to_anchor=(
-                0.5,
-                -0.15,
-            ),  # x=0.5 centers horizontally, y=-0.15 moves below the axes
-            fontsize="small",
-            markerscale=0.4,
-            ncol=4,  # Optional: spread legend items across multiple columns
+        plot_observables(
+            x=asset_days,
+            data=self.power_plant.cashflows,
+            confidence_levels=confidence_levels,
+            path_index=path_index,
+            ax=axes[1],  # <-- plot directly into this Axes
+            title="Cashflows",
+            ylabel="Cash (€)",
+            show=False,
         )
 
         # --- Row 3: Spread ---
         spread = self.power_plant.spreads.loc[asset_days]
+
+        lower1, lower2 = confidence_levels
+
+        label_ci1 = f"{int(lower1 * 100)}% CI"
+        label_ci2 = f"{int(lower2 * 100)}% CI"
+
+        upper1, upper2 = 1 - lower1, 1 - lower2
 
         spread_mean = spread.mean(axis=1)
         spread_lower1 = np.percentile(spread, lower1 * 100, axis=1)
