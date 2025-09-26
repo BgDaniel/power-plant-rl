@@ -1,3 +1,5 @@
+from typing import Optional, Tuple
+
 import matplotlib
 import pandas as pd
 
@@ -286,6 +288,38 @@ class OpsPlotPowerPlant:
 
         ax4.set_title("Operational State")
         ax4.grid(False)
+
+        plt.tight_layout()
+        plt.show(block=True)
+
+    def plot_asset_value(
+        self,
+        path_index: Optional[int] = None,
+        confidence_levels: Tuple[float, float] = (0.01, 0.05),
+    ) -> None:
+        """
+        Plot daily asset values with confidence intervals.
+
+        Parameters
+        ----------
+        path_index : int, optional
+            Index of a single simulation path to overlay. Default is None.
+        confidence_levels : tuple of float, default=(0.01, 0.05)
+            Percentile levels for confidence intervals (e.g., 1% and 5%).
+        """
+        asset_value: pd.DataFrame = self.power_plant.values
+
+        fig, ax = plt.subplots(figsize=(12, 5))
+
+        plot_observables(
+            x=asset_value.index,
+            data=asset_value,
+            confidence_levels=confidence_levels,
+            path_index=path_index,
+            ax=ax,
+            title="Asset Value",
+            show=False,
+        )
 
         plt.tight_layout()
         plt.show(block=True)

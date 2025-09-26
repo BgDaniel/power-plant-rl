@@ -1,18 +1,21 @@
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
+from typing import Optional, Tuple, Union
 
 
 def plot_observables(
-    x,
-    data,
-    confidence_levels=(0.01, 0.05),
-    path_index=None,
-    ax=None,
-    title=None,
-    ylabel=None,
-    show=True,
-    figsize=(8, 4),
-):
+    x: Union[np.ndarray, pd.DatetimeIndex, list],
+    data: pd.DataFrame,
+    confidence_levels: Tuple[float, float] = (0.01, 0.05),
+    path_index: Optional[int] = None,
+    ax: Optional[Axes] = None,
+    title: Optional[str] = None,
+    ylabel: Optional[str] = None,
+    show: bool = True,
+    figsize: Tuple[float, float] = (8, 4),
+) -> None:
     """
     Plot a time series with mean, confidence intervals, and an optional single path overlay.
 
@@ -87,4 +90,4 @@ def plot_observables(
 
     if show:
         plt.tight_layout()
-        plt.show()
+        plt.show(block=True)

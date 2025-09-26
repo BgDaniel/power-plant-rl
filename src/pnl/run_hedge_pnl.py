@@ -77,7 +77,13 @@ power_plant = PowerPlant(
 # Run the simulation
 power_plant.optimize()
 
+path_index = 47
+
+# Plot power plant results
 ops_plot_power_plant = OpsPlotPowerPlant(power_plant)
+ops_plot_power_plant.plot_simulation_summary(path_index=path_index)
+ops_plot_power_plant.plot_asset_value(path_index=0)
+
 
 min_var_hedge = MinVarHedge(
     n_sims=n_sims,
@@ -92,7 +98,6 @@ min_var_hedge = MinVarHedge(
 min_var_hedge.hedge()
 min_var_hedge.roll_out_cashflows()
 
-
 hedge_pnl = HedgePnL(
     n_sims=n_sims,
     simulation_days=simulation_days,
@@ -105,4 +110,4 @@ hedge_pnl = HedgePnL(
 hedge_pnl.calculate_pnl()
 
 ops_plot_pnl = OpsPlotPnL(hedge_pnl)
-ops_plot_pnl.plot_pnl()
+ops_plot_pnl.plot_pnl(path_index=path_index)

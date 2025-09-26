@@ -29,9 +29,9 @@ class HedgePnL:
         Cumulative hedge cashflows.
     cashflows_from_asset_cumulative : pd.DataFrame
         Cumulative asset cashflows.
-    cash_account : pd.DataFrame
+    cashflow_cash_account : pd.DataFrame
         Daily PnL changes per simulation path.
-    cash_account_cumulative : pd.DataFrame
+    cash_account_total : pd.DataFrame
         Cumulative PnL per simulation path.
     fwds : xr.DataArray
         Forward prices used for hedging.
@@ -60,6 +60,7 @@ class HedgePnL:
         """
         self.n_sims: int = n_sims
         self.simulation_days: pd.DatetimeIndex = simulation_days
+        self.asset = asset
         self.hedge: MinVarHedge = hedge
 
         self.cashflows_from_hedge: pd.DataFrame = hedge.cashflows
@@ -70,12 +71,12 @@ class HedgePnL:
 
         self.fwds: xr.DataArray = hedge.fwds
 
-        self.cash_account: pd.DataFrame = pd.DataFrame(
+        self.cashflow_cash_account: pd.DataFrame = pd.DataFrame(
             index=simulation_days,
             columns=range(n_sims),
             data=np.zeros((len(simulation_days), n_sims)),
         )
-        self.cash_account_cumulative: pd.DataFrame = self.cash_account.cumsum()
+        self.cash_account_total: pd.DataFrame = self.cashflow_cash_account.cumsum()
 
     def calculate_pnl(self) -> None:
         """
@@ -116,7 +117,7 @@ class HedgePnL:
                     }
                 )
 
-                self.cash_account.loc[simulation_day] -= delta_position * forward_price
+                self.cashflow_cash_account.loc[simulation_day] -= delta_position * forward_price
 
     def _rebalance_delta_positions(self, simulation_day: pd.Timestamp) -> None:
         """Rebalance delta positions for a given simulation day."""
@@ -147,18 +148,9 @@ class HedgePnL:
                         SIMULATION_DAY: previous_day,
                     }
                 )
-                forward_prices_yesterday = self.fwds.sel(
-                    {
-                        ASSET: asset,
-                        DELIVERY_START: delivery_start_date,
-                        SIMULATION_DAY: previous_day,
-                    }
-                )
 
-                self.cash_account.loc[simulation_day] = (
-                    delta_positions_yesterday * forward_prices_yesterday
-                    - delta_positions_today * forward_prices_today
-                )
+                d_delta = delta_positions_today - delta_positions_yesterday
+                self.cashflow_cash_account.loc[simulation_day] -= d_delta * forward_prices_today
 
     def plot_pnl(
         self,
@@ -176,7 +168,7 @@ class HedgePnL:
             Percentile levels for confidence intervals. Example: (1.0, 5.0) → 1% and 5%.
         """
         lower1, lower5 = confidence_levels
-        cash: np.ndarray = self.cash_account.values
+        cash: np.ndarray = self.cashflow_cash_account.values
         asset_days: pd.DatetimeIndex = self.simulation_days
 
         mean_cash: np.ndarray = cash.mean(axis=1)

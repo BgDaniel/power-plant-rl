@@ -598,6 +598,8 @@ class PowerPlant:
 
         self.determine_optimal_dispatch()
 
+        self.value_0 = self.values.loc[self.asset_days[0]].mean()
+
         elapsed_time = time.time() - start_time
         logging.info(
             "Power plant optimization successfully finished. "
