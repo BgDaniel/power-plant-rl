@@ -136,7 +136,7 @@ class OpsPlotPowerPlant:
         )
 
         # --- Row 1: Values ---
-        values = self.power_plant._optimal_value
+        values = self.power_plant.values
 
         value_mean = values.mean(axis=1)
         value_lower1 = np.percentile(values, lower1 * 100, axis=1)

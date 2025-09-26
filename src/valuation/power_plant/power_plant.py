@@ -200,7 +200,7 @@ class PowerPlant:
         # Compute spread: power - efficiency * coal
         self.spreads: pd.DataFrame = spots_power.sub(self.efficiency * spots_coal)
 
-        self._optimal_value = pd.DataFrame(
+        self.values = pd.DataFrame(
             np.zeros((self.n_steps, self.n_sims)),
             index=self.asset_days,
             columns=range(self.n_sims),
@@ -512,7 +512,7 @@ class PowerPlant:
         # First day
         first_day = self.asset_days[0]
         self._optimal_state.loc[first_day, :] = self._initial_state
-        self._optimal_value.loc[first_day, :] = self.values_for_states.sel(
+        self.values.loc[first_day, :] = self.values_for_states.sel(
             simulation_day=first_day, operational_state=self._initial_state
         ).values
         self.cashflows.loc[first_day, :] = self.cashflows_for_states.sel(
@@ -550,7 +550,7 @@ class PowerPlant:
             )
 
             # Fill value and cashflow
-            self._optimal_value.loc[current_day, :] = self.values_for_states.sel(
+            self.values.loc[current_day, :] = self.values_for_states.sel(
                 simulation_day=current_day, operational_state=current_optimal_states
             ).values
             self.cashflows.loc[current_day, :] = self.cashflows_for_states.sel(

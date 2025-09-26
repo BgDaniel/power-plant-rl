@@ -55,7 +55,7 @@ coal_fwd_0 = ForwardCurve.generate_curve(
 )
 
 asset_start = pd.Timestamp(2025, 10, 1)
-asset_end = simulation_start + pd.Timedelta(days=365)
+asset_end = asset_start + pd.Timedelta(days=364)
 
 asset_days = pd.date_range(start=asset_start, end=asset_end, freq="D")
 
