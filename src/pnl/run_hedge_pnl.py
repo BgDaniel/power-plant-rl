@@ -16,7 +16,7 @@ config_path_spread_model = "model_configs/spread_model.json"
 as_of_date = pd.Timestamp("2025-09-30")
 
 simulation_start = as_of_date
-simulation_end = pd.Timestamp("2026-12-30")
+simulation_end = pd.Timestamp("2026-12-31")
 
 simulation_days = pd.date_range(start=simulation_start, end=simulation_end, freq="D")
 
@@ -78,8 +78,6 @@ power_plant = PowerPlant(
 power_plant.optimize()
 
 ops_plot_power_plant = OpsPlotPowerPlant(power_plant)
-# ops_plot_power_plant.plot_r2()
-# ops_plot_power_plant.plot_simulation_summary(path_index=0)
 
 min_var_hedge = MinVarHedge(
     n_sims=n_sims,

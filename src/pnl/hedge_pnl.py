@@ -1,6 +1,6 @@
 import pandas as pd
 import xarray as xr
-import matplotlib.pyplot as plt
+import numpy as np
 
 from constants import ASSET, DELIVERY_START, SIMULATION_DAY
 from hedging.min_var_hedge import MinVarHedge
@@ -50,7 +50,7 @@ class HedgePnL:
 
         self.fwds = fwds
 
-        self.cash_account = pd.DataFrame(index=simulation_days, data=range(self.n_sims))
+        self.cash_account = pd.DataFrame(index=simulation_days, colums=range(self.n_sims), data= np.zeros((len(simulation_days, self.n_sims))))
         self.cash_account_cumulative = self.cash_account.cumsum()
 
     def calculate_pnl(self):
