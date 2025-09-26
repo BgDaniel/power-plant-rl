@@ -2,8 +2,7 @@ import pandas as pd
 import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-
+from tqdm import tqdm
 
 from constants import ASSET, DELIVERY_START, SIMULATION_DAY
 from hedging.min_var_hedge import MinVarHedge
@@ -16,12 +15,26 @@ class HedgePnL:
 
     Attributes
     ----------
-    hedge : Hedge
-        The hedging strategy object containing cashflows and other relevant data.
-    pnl : pd.Series
-        The calculated PnL series.
-    cumulative_pnl : pd.Series
-        The cumulative PnL series.
+    n_sims : int
+        Number of simulation paths.
+    simulation_days : pd.DatetimeIndex
+        Index of simulation days.
+    hedge : MinVarHedge
+        The hedging strategy object containing deltas and cashflows.
+    cashflows_from_hedge : pd.DataFrame
+        Hedge cashflows per simulation path.
+    cashflows_from_asset : pd.DataFrame
+        Asset cashflows per simulation path.
+    cashflows_from_hedge_cumulative : pd.DataFrame
+        Cumulative hedge cashflows.
+    cashflows_from_asset_cumulative : pd.DataFrame
+        Cumulative asset cashflows.
+    cash_account : pd.DataFrame
+        Daily PnL changes per simulation path.
+    cash_account_cumulative : pd.DataFrame
+        Cumulative PnL per simulation path.
+    fwds : xr.DataArray
+        Forward prices used for hedging.
     """
 
     def __init__(
@@ -30,56 +43,60 @@ class HedgePnL:
         simulation_days: pd.DatetimeIndex,
         asset: PowerPlant,
         hedge: MinVarHedge,
-        fwds: xr.DataArray,
     ) -> None:
         """
         Initialize the HedgePnL class with a hedging strategy.
 
         Parameters
         ----------
-        hedge : Hedge
+        n_sims : int
+            Number of simulation paths.
+        simulation_days : pd.DatetimeIndex
+            Index of simulation days.
+        asset : PowerPlant
+            The underlying asset for the hedge.
+        hedge : MinVarHedge
             The hedging strategy object.
         """
-        self.n_sims = n_sims
-        self.simulation_days = simulation_days
+        self.n_sims: int = n_sims
+        self.simulation_days: pd.DatetimeIndex = simulation_days
+        self.hedge: MinVarHedge = hedge
 
-        self.hedge = hedge
+        self.cashflows_from_hedge: pd.DataFrame = hedge.cashflows
+        self.cashflows_from_asset: pd.DataFrame = asset.cashflows
 
-        self.cashflows_from_hedge = hedge.cashflows
-        self.cashflows_from_asset = asset.cashflows
+        self.cashflows_from_hedge_cumulative: pd.DataFrame = hedge.cashflows.cumsum()
+        self.cashflows_from_asset_cumulative: pd.DataFrame = asset.cashflows.cumsum()
 
-        self.cashflows_from_hedge_cumulative = hedge.cashflows.cumsum()
-        self.cashflows_from_asset_cumulative = asset.cashflows.cumsum()
+        self.fwds: xr.DataArray = hedge.fwds
 
-        self.fwds = fwds
-
-        self.cash_account = pd.DataFrame(
+        self.cash_account: pd.DataFrame = pd.DataFrame(
             index=simulation_days,
-            columns=range(self.n_sims),
-            data=np.zeros((len(simulation_days), self.n_sims)),
+            columns=range(n_sims),
+            data=np.zeros((len(simulation_days), n_sims)),
         )
-        self.cash_account_cumulative = self.cash_account.cumsum()
+        self.cash_account_cumulative: pd.DataFrame = self.cash_account.cumsum()
 
-    def calculate_pnl(self):
+    def calculate_pnl(self) -> None:
         """
         Calculate the PnL of the hedging strategy based on its cashflows.
-
-        Returns
-        -------
-        pd.Series
-            The calculated PnL series.
+        Uses a progress bar to track simulation day processing.
         """
-        simulation_start = self.simulation_days[0]
-
-        # buy initial delta positions
+        # Buy initial delta positions on the first day
+        simulation_start: pd.Timestamp = self.simulation_days[0]
         self._buy_delta_positions(simulation_start)
 
-        for simulation_day in self.simulation_days[1:]:
-            # rebalance delta positions
+        # Rebalance delta positions for remaining days
+        for simulation_day in tqdm(
+            self.simulation_days[1:],
+            total=len(self.simulation_days) - 1,
+            desc="Calculating PnL",
+            unit="day",
+        ):
             self._rebalance_delta_positions(simulation_day)
 
-    def _buy_delta_positions(self, simulation_day: pd.Timestamp):
-
+    def _buy_delta_positions(self, simulation_day: pd.Timestamp) -> None:
+        """Buy initial delta positions for the hedging strategy."""
         for asset in self.hedge.deltas.coords[ASSET].values:
             for delivery_start_date in (
                 self.hedge.deltas.loc[ASSET:asset].coords[DELIVERY_START].values
@@ -99,16 +116,14 @@ class HedgePnL:
                     }
                 )
 
-                # Update cash account for buying delta positions
                 self.cash_account.loc[simulation_day] -= delta_position * forward_price
 
-        pass
+    def _rebalance_delta_positions(self, simulation_day: pd.Timestamp) -> None:
+        """Rebalance delta positions for a given simulation day."""
+        delivery_start_dates = self.hedge.get_front_months_start_dates(simulation_day)
 
-    def _rebalance_delta_positions(self, simulation_day: pd.Timestamp):
         for asset in self.hedge.deltas.coords[ASSET].values:
-            for delivery_start_date in (
-                self.hedge.deltas.loc[ASSET:asset].coords[DELIVERY_START].values
-            ):
+            for delivery_start_date in delivery_start_dates:
                 forward_prices_today = self.fwds.sel(
                     {
                         ASSET: asset,
@@ -123,9 +138,8 @@ class HedgePnL:
                         SIMULATION_DAY: simulation_day,
                     }
                 )
-                previous_day = self.simulation_days[
-                    self.simulation_days.get_loc(simulation_day) - 1
-                ]
+
+                previous_day: pd.Timestamp = simulation_day + pd.Timedelta(days=-1)
                 delta_positions_yesterday = self.hedge.deltas.sel(
                     {
                         ASSET: asset,
@@ -133,7 +147,6 @@ class HedgePnL:
                         SIMULATION_DAY: previous_day,
                     }
                 )
-
                 forward_prices_yesterday = self.fwds.sel(
                     {
                         ASSET: asset,
@@ -142,7 +155,6 @@ class HedgePnL:
                     }
                 )
 
-                # Update cash account for rebalancing delta positions
                 self.cash_account.loc[simulation_day] = (
                     delta_positions_yesterday * forward_prices_yesterday
                     - delta_positions_today * forward_prices_today
@@ -164,22 +176,21 @@ class HedgePnL:
             Percentile levels for confidence intervals. Example: (1.0, 5.0) → 1% and 5%.
         """
         lower1, lower5 = confidence_levels
-        cash = self.cash_account.values  # shape (n_days, n_sims)
-        asset_days = self.simulation_days
+        cash: np.ndarray = self.cash_account.values
+        asset_days: pd.DatetimeIndex = self.simulation_days
 
-        # Compute mean and confidence intervals
-        mean_cash = cash.mean(axis=1)
-        lower1_vals = np.percentile(cash, lower1, axis=1)
-        upper1_vals = np.percentile(cash, 100 - lower1, axis=1)
-        lower5_vals = np.percentile(cash, lower5, axis=1)
-        upper5_vals = np.percentile(cash, 100 - lower5, axis=1)
+        mean_cash: np.ndarray = cash.mean(axis=1)
+        lower1_vals: np.ndarray = np.percentile(cash, lower1, axis=1)
+        upper1_vals: np.ndarray = np.percentile(cash, 100 - lower1, axis=1)
+        lower5_vals: np.ndarray = np.percentile(cash, lower5, axis=1)
+        upper5_vals: np.ndarray = np.percentile(cash, 100 - lower5, axis=1)
 
         fig, ax = plt.subplots(figsize=(10, 5))
 
         # Plot mean
         ax.plot(asset_days, mean_cash, color="green", lw=1.0, label="Mean PnL")
 
-        # Plot confidence intervals as filled areas
+        # Plot confidence intervals
         ax.fill_between(
             asset_days,
             lower5_vals,
@@ -208,8 +219,8 @@ class HedgePnL:
                 label=f"Simulation Path {path_index}",
             )
 
-        # Plot the target final value of the power plant as a yellow cross
-        final_value = self.cashflows_from_asset_cumulative.iloc[-1].mean()
+        # Plot the target final value of the power plant
+        final_value: float = self.cashflows_from_asset_cumulative.iloc[-1].mean()
         ax.scatter(
             asset_days[-1],
             final_value,

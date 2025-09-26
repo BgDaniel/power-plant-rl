@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Optional, Dict
+from typing import Optional, Dict, Tuple
 
 from constants import KEY_RESIDUALS, KEY_PREDICTED, KEY_R2
 
@@ -33,7 +33,7 @@ def r2_score_manual(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 def check_degenerate_case(
     x: np.ndarray, y: np.ndarray
-) -> Optional[Dict[str, np.ndarray]]:
+) -> Tuple[bool, Optional[Dict[str, np.ndarray]]]:
     """
     Check if all features are nearly constant across samples.
 
@@ -46,17 +46,19 @@ def check_degenerate_case(
 
     Returns
     -------
-    Optional[Dict[str, np.ndarray]]
-        If degenerate, returns a dictionary with:
-        - predicted : mean of y
-        - r2 : 0.0
-        - residuals : y - predicted
-        - condition_number : np.nan
-        Otherwise, returns None.
+    Tuple[bool, Optional[Dict[str, np.ndarray]]]
+        - is_degenerate : True if features are nearly constant, False otherwise.
+        - result : dictionary with predicted, r2, residuals, condition_number if degenerate, else None.
     """
     x_range = x.max(axis=0) - x.min(axis=0)
     if np.all(x_range < EPS):
         y_pred = np.full_like(y, np.mean(y))
         residuals = y - y_pred
-        return {KEY_PREDICTED: y_pred, KEY_R2: 0.0, KEY_RESIDUALS: residuals}
-    return None
+        result = {
+            KEY_PREDICTED: y_pred,
+            KEY_R2: 0.0,
+            KEY_RESIDUALS: residuals
+        }
+        return True, result
+
+    return False, None

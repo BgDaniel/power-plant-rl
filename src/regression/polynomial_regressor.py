@@ -74,7 +74,9 @@ class PolynomialRegression:
         # -------------------------
         # Check for degenerate case: all features almost constant
         # -------------------------
-        check_degenerate_case(self.x, self.y)
+        is_degenerate, degenerate_result = check_degenerate_case(self.x, self.y)
+        if is_degenerate:
+            return degenerate_result
 
         # -------------------------
         # Normal polynomial regression
@@ -90,8 +92,11 @@ class PolynomialRegression:
         # Compute R², override if target is constant
         ss_tot = np.sum((self.y - np.mean(self.y)) ** 2)
         r2 = self.model.score(self.x_poly, self.y)
-
         if ss_tot < EPS:  # target is constant
             r2 = float("nan")
 
-        return {KEY_PREDICTED: y_pred, KEY_R2: r2, KEY_RESIDUALS: residuals}
+        return {
+            KEY_PREDICTED: y_pred,
+            KEY_R2: r2,
+            KEY_RESIDUALS: residuals
+        }

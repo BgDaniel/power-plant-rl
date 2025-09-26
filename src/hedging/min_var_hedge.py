@@ -55,7 +55,7 @@ class MinVarHedge:
         self._spots_power = spots_power
         self._spots_coal = spots_coal
 
-        self._fwds = xr.concat(
+        self.fwds = xr.concat(
             [fwds_power, fwds_coal], dim=xr.DataArray([POWER, COAL], dims=[ASSET])
         )
 
@@ -136,15 +136,22 @@ class MinVarHedge:
         Returns:
             None
         """
-        self.tqdm = tqdm(
-            self._asset_days,
-            total=len(self._asset_days) - 1,
+        # add possible simualtion days before first asset date
+
+        self._hedge_dates = pd.date_range(
+            start=min(self._simulation_days.min(), self._asset_days.min()),
+            end=self._asset_days.max(),
+            freq="D"
+        )
+
+        for hedge_date in tqdm(
+            self._hedge_dates,
+            total=len(self._hedge_dates ) - 1,
             desc="Determine minimal variance hedge",
             unit="day",
-        )
-        for asset_day in self.tqdm:
-            front_months_start_dates = self._get_front_months_start_dates(asset_day)
-            self._compute_delta(asset_day, front_months_start_dates)
+        ):
+            front_months_start_dates = self.get_front_months_start_dates(hedge_date)
+            self._compute_delta(hedge_date, front_months_start_dates)
 
     def roll_out_cashflows(self) -> None:
         """
@@ -186,8 +193,8 @@ class MinVarHedge:
                 # Hedge positions are struck with a strike price of zero
                 self.cashflows.loc[asset_day] += bom_delta_asset.values * spots
 
-    def _get_front_months_start_dates(
-        self, simulation_day: pd.Timestamp
+    def get_front_months_start_dates(
+        self, hedge_date: pd.Timestamp
     ) -> xr.DataArray:
         """
         Extract front month forward prices where delivery start dates lie between the given
@@ -197,7 +204,7 @@ class MinVarHedge:
         ----------
         fwds_power : xr.DataArray
             Forward curve array with dims (SIMULATION_PATH, SIMULATION_DAY, DELIVERY_START).
-        simulation_day : pd.Timestamp
+        hedge_date : pd.Timestamp
             The current simulation day.
 
         Returns
@@ -206,7 +213,7 @@ class MinVarHedge:
             Filtered forward prices with restricted DELIVERY_START.
         """
         # Define interval
-        start = pd.Timestamp(simulation_day) + pd.Timedelta(days=1)
+        start = pd.Timestamp(hedge_date) + pd.Timedelta(days=1)
         end = self._asset_days[-1]  # last asset day
 
         mask = (self._delivery_start_dates >= start) & (
@@ -216,7 +223,7 @@ class MinVarHedge:
         return self._delivery_start_dates[mask]
 
     def _compute_delta(
-        self, asset_day: pd.Timestamp, front_months_start_dates: pd.DatetimeIndex
+        self, hedge_date: pd.Timestamp, front_months_start_dates: pd.DatetimeIndex
     ) -> None:
         """
         Compute hedge deltas for the given asset_day using polynomial regression
@@ -224,7 +231,7 @@ class MinVarHedge:
 
         Parameters
         ----------
-        asset_day : pd.Timestamp
+        hedge_date : pd.Timestamp
             Current simulation day.
         front_months_fwds_power : xr.DataArray
             Forward prices (n_sims, delivery_months) at asset_day.
@@ -235,17 +242,16 @@ class MinVarHedge:
             Hedge deltas (n_sims, delivery_months) for this day.
         """
         for delivery_start in front_months_start_dates:
-
             self.deltas.loc[
                 {
-                    SIMULATION_DAY: asset_day,
+                    SIMULATION_DAY: hedge_date,
                     DELIVERY_START: delivery_start,
                 }
-            ] = self._hedge_front_month(asset_day, delivery_start)
+            ] = self._hedge_front_month(hedge_date, delivery_start)
 
     def _hedge_front_month(
         self,
-        asset_day: pd.Timestamp,
+        hedge_date: pd.Timestamp,
         delivery_start: pd.Timestamp,
         r2_threshold: float = 0.0,
     ) -> np.ndarray:
@@ -254,7 +260,7 @@ class MinVarHedge:
 
         Parameters
         ----------
-        asset_day : pd.Timestamp
+        hedge_date : pd.Timestamp
             The current simulation day for which the hedge is computed.
         delivery_start : str
             The first day of the delivery month.
@@ -287,8 +293,8 @@ class MinVarHedge:
             dim=SIMULATION_DAY
         )
 
-        fwds = self._fwds.sel(
-            {DELIVERY_START: delivery_start, SIMULATION_DAY: asset_day}
+        fwds = self.fwds.sel(
+            {DELIVERY_START: delivery_start, SIMULATION_DAY: hedge_date}
         )
 
         delta_position_calculator = self._delta_position_type(
@@ -312,7 +318,7 @@ class MinVarHedge:
         # Store R² using .sel
         self._r2_scores.loc[
             dict(
-                SIMULATION_DAY=asset_day,
+                SIMULATION_DAY=hedge_date,
                 DELIVERY_START=delivery_start,
             )
         ] = r2_score
