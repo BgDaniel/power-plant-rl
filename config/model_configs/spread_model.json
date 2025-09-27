@@ -1,5 +1,5 @@
 {
     "power": "model_configs/power_2_factor_model_config.json",
     "coal": "model_configs/coal_2_factor_model_config.json",
-    "rho_long": 0.6
+    "rho_long": 0.2
 }

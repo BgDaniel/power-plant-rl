@@ -72,8 +72,6 @@ class HedgePnL:
         # Daily and cumulative cashflows
         self.cashflows_from_hedge: pd.DataFrame = hedge.cashflows
         self.cashflows_from_asset: pd.DataFrame = asset.cashflows
-        self.cashflows_from_hedge_cumulative: pd.DataFrame = hedge.cashflows.cumsum()
-        self.cashflows_from_asset_cumulative: pd.DataFrame = asset.cashflows.cumsum()
 
         # Forward price curves
         self.fwds: xr.DataArray = hedge.fwds
@@ -84,7 +82,12 @@ class HedgePnL:
             columns=range(n_sims),
             data=np.zeros((len(simulation_days), n_sims)),
         )
-        self.cash_account_total: pd.DataFrame = self.cashflow_cash_account.cumsum()
+
+        self.value_fwd_positions = pd.DataFrame(
+            index=simulation_days,
+            columns=range(n_sims),
+            data=np.zeros((len(simulation_days), n_sims)),
+        )
 
     # ------------------------------------------------------------------ #
     def calculate_pnl(self) -> None:
@@ -141,9 +144,13 @@ class HedgePnL:
                     }
                 )
 
-                self.cashflow_cash_account.loc[simulation_start] -= (
+                value_fwd_position = (
                     n_days_in_front_month * delta_position * forward_price
                 )
+
+                self.cashflow_cash_account.loc[simulation_start] -= value_fwd_position
+
+                self.value_fwd_positions.loc[simulation_start] += value_fwd_position
 
     # ------------------------------------------------------------------ #
     def _rebalance_delta_positions(self, simulation_day: pd.Timestamp) -> None:
@@ -197,4 +204,8 @@ class HedgePnL:
 
                 self.cashflow_cash_account.loc[simulation_day] -= (
                     n_days_in_front_month * d_delta * forward_prices_today
+                )
+
+                self.value_fwd_positions.loc[simulation_day] += (
+                    delta_positions_today * n_days_in_front_month * forward_prices_today
                 )

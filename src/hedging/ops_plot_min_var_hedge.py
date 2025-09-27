@@ -137,22 +137,63 @@ class OpsPlotMinVarHedge:
 
         plt.show(block=True)
 
-    def plot_deltas(self) -> None:
+    def plot_mean_delta_positions(self) -> None:
         """
-        Plot R² values over simulation days in a single plot with one curve per operational state.
+        Plot delta hedge positions for POWER and COAL over simulation days.
 
-        Colors:
-        - IDLE: red
-        - RUNNING: green
-        - RAMPING_DOWN: orange
-        - RAMPING_UP: yellow
+        This method creates a two-row subplot:
+            • Top row: Delta positions for POWER across all delivery start dates.
+            • Bottom row: Delta positions for COAL across all delivery start dates.
 
-        Line styles:
-        - IDLE: solid
-        - RUNNING: dashed
-        - RAMPING_DOWN: dash-dot
-        - RAMPING_UP: dotted
+        For each asset, each line represents the time series of delta values for a
+        given delivery start date.
 
-        UNDEFINED states are ignored.
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+            The function displays the plot and does not return a value.
         """
-        pass
+        assets: list[str] = [POWER, COAL]
+        fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=False)
+
+        for ax, asset in zip(axes, assets):
+            for delivery_start in self.hedge._delivery_start_dates:
+                # Extract delta positions for a specific delivery month and asset
+                delta_values = (
+                    self.hedge.deltas
+                    .sel({DELIVERY_START: delivery_start, ASSET: asset})
+                    .mean(dim=SIMULATION_PATH)  # <---- MEAN ACROSS PATHS
+                    .values
+                )
+
+                # Format delivery start date for legend label
+                delivery_ts: pd.Timestamp = pd.Timestamp(delivery_start)
+                label = delivery_ts.strftime("%Y-%m")
+
+                ax.plot(
+                    self.hedge._simulation_days,
+                    delta_values,
+                    label=label,
+                    lw=1.5
+                )
+
+            ax.set_title(f"{asset}", fontsize=12)
+            ax.set_ylabel("Delta Position")
+            ax.grid(True)
+            ax.set_ylim(-1.1, 1.1)
+            ax.legend(
+                bbox_to_anchor=(1.05, 1),
+                loc="upper left",
+                fontsize="small",
+                title="Delivery Start"
+            )
+
+        axes[1].set_xlabel("Simulation Day")
+        fig.suptitle("Delta Hedge Positions (Mean) Over Time", fontsize=16)
+
+        plt.tight_layout()
+        plt.show(block=True)

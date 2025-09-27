@@ -210,6 +210,53 @@ class ForwardCurve:
         series = pd.Series(data=values, index=dates)
         return ForwardCurve(series=series, as_of_date=as_of_date, name=name)
 
+    @staticmethod
+    def plot_curves(
+        curve1: ForwardCurve,
+        curve2: ForwardCurve,
+        title: Optional[str] = None,
+    ) -> None:
+        """
+        Plot two forward curves on the same figure:
+        - Top axis: both curves over time.
+        - Bottom axis: the spread (curve1 - curve2) over time.
+
+        Parameters
+        ----------
+        curve1 : ForwardCurve
+            First forward curve to plot.
+        curve2 : ForwardCurve
+            Second forward curve to plot.
+        title : str, optional
+            Super-title for the figure. Defaults to "Forward Curves & Spread".
+        """
+        # Align series to common index to compute spread
+        combined_index = curve1.series.index.union(curve2.series.index)
+        c1 = curve1.series.reindex(combined_index).interpolate()
+        c2 = curve2.series.reindex(combined_index).interpolate()
+        spread = c1 - c2
+
+        fig, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+
+        # Top axis: two curves
+        axes[0].plot(c1.index, c1.values, label=curve1.name, lw=2)
+        axes[0].plot(c2.index, c2.values, label=curve2.name, lw=2)
+        axes[0].set_ylabel("Price")
+        axes[0].set_title("Forward Curves")
+        axes[0].legend()
+        axes[0].grid(True)
+
+        # Bottom axis: spread
+        axes[1].plot(spread.index, spread.values, color="purple", lw=2)
+        axes[1].axhline(0, color="black", lw=1, linestyle="--")
+        axes[1].set_ylabel("Spread")
+        axes[1].set_xlabel("Date")
+        axes[1].set_title(f"Spread ({curve1.name} - {curve2.name})")
+        axes[1].grid(True)
+
+        fig.suptitle(title or "Forward Curves & Spread", fontsize=14)
+        plt.tight_layout()
+        plt.show()
 
 def generate_yearly_seasonal_curve(
     as_of_date: pd.Timestamp,

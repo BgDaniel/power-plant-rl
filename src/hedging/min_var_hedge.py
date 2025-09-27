@@ -174,7 +174,7 @@ class MinVarHedge:
             None
         """
         for asset_day in self._asset_days:
-            bom_delivery_start_day = asset_day - pd.offsets.MonthBegin(n=0)
+            bom_delivery_start_day = asset_day.to_period("M").to_timestamp()
 
             # Terminal delta of the current BOM
             bom_maturity_day = bom_delivery_start_day + pd.Timedelta(days=-1)
@@ -322,6 +322,11 @@ class MinVarHedge:
                 DELIVERY_START=delivery_start,
             )
         ] = r2_score
+
+        # compute value of fwd positions
+        n_days_in_front_month: int = pd.Timestamp(
+            delivery_start
+        ).days_in_month
 
         return delta_positions
 
