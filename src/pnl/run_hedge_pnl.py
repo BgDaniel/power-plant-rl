@@ -3,6 +3,7 @@ import pandas as pd
 
 from forward_curve.forward_curve import generate_yearly_seasonal_curve, ForwardCurve
 from hedging.min_var_hedge import MinVarHedge
+from hedging.ops_plot_min_var_hedge import OpsPlotMinVarHedge
 from market_simulation.spread_model.spread_model import SpreadModel
 from pnl.hedge_pnl import HedgePnL
 from pnl.ops_plot_hedge_pnl import OpsPlotPnL
@@ -98,12 +99,14 @@ min_var_hedge = MinVarHedge(
 min_var_hedge.hedge()
 min_var_hedge.roll_out_cashflows()
 
+
 hedge_pnl = HedgePnL(
     n_sims=n_sims,
     simulation_days=simulation_days,
     asset=power_plant,
     hedge=min_var_hedge
 )
+
 
 
 # Calculate PnL based on the hedging strategy

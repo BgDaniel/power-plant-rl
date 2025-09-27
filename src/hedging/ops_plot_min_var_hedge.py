@@ -136,3 +136,23 @@ class OpsPlotMinVarHedge:
         ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc="upper right")
 
         plt.show(block=True)
+
+    def plot_deltas(self) -> None:
+        """
+        Plot R² values over simulation days in a single plot with one curve per operational state.
+
+        Colors:
+        - IDLE: red
+        - RUNNING: green
+        - RAMPING_DOWN: orange
+        - RAMPING_UP: yellow
+
+        Line styles:
+        - IDLE: solid
+        - RUNNING: dashed
+        - RAMPING_DOWN: dash-dot
+        - RAMPING_UP: dotted
+
+        UNDEFINED states are ignored.
+        """
+        pass

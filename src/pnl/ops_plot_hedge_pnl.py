@@ -69,23 +69,23 @@ class OpsPlotPnL:
             show=False,
         )
 
-        axes[1].axhline(
-            y=self.pnl.asset.value_0,  # y-position of the horizontal line
-            color="blue",
-            linestyle="--",
-            linewidth=1.5,
-            label=f"Asset Value 0 = {self.pnl.asset.value_0:.1f}"  # no decimals
-        )
+        #axes[1].axhline(
+        #    y=self.pnl.asset.value_0,  # y-position of the horizontal line
+        #    color="blue",
+        #    linestyle="--",
+        #    linewidth=1.5,
+        #    label=f"Asset Value 0 = {self.pnl.asset.value_0:.1f}"  # no decimals
+        #)
 
-        axes[1].legend(
-            loc="upper center",  # center the legend horizontally
-            bbox_to_anchor=(0.5, -0.15),  # place below the x-axis
-            fontsize="small",
-            ncol=1  # single column (adjust if you add more items)
-        )
+        #axes[1].legend(
+        #    loc="upper center",  # center the legend horizontally
+        #    bbox_to_anchor=(0.5, -0.15),  # place below the x-axis
+        #    fontsize="small",
+        #    ncol=1  # single column (adjust if you add more items)
+        #)
 
-        plt.tight_layout()
-        plt.show(block=True)
+        #plt.tight_layout()
+        #plt.show(block=True)
 
     def plot_asset_and_hedge_cashflows(self, path_index: Optional[int] = None) -> None:
         """

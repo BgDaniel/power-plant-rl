@@ -184,7 +184,7 @@ class MinVarDelta(DeltaPosition):
         # Predicted values
         y_pred = beta @ delta_positions
         residuals = self.y - y_pred
-        r2 = 0.0  # degenerate case
+        r2 = float('nan')  # degenerate case
 
         # Delta positions as xr.DataArray with shape (n_sims, 2)
         delta_positions = xr.DataArray(
