@@ -1,10 +1,7 @@
 import matplotlib.pyplot as plt
 import pandas as pd
-import numpy as np
 from sklearn.metrics import r2_score
-from typing_extensions import Any
 
-from delta_position.min_var_delta.min_var_delta import MinVarDelta
 from hedging.min_var_hedge import MinVarHedge
 
 from constants import POWER, COAL, ASSET, DELIVERY_START, SIMULATION_PATH

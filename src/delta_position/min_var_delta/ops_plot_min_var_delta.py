@@ -4,8 +4,8 @@ from matplotlib import cm
 from scipy.interpolate import griddata
 import xarray as xr
 
-from constants import ASSET, POWER, COAL, SIMULATION_PATH, KEY_PREDICTED, SPREAD
-from delta_position.min_var_delta.min_var_delta import MinVarDelta
+from constants import ASSET, POWER, COAL, SIMULATION_PATH, KEY_PREDICTED
+from delta_position.min_var_delta.polynomial_delta.polynomial_delta import PolynomialDelta
 
 
 class OpsPlotMinVarDelta:
@@ -17,15 +17,15 @@ class OpsPlotMinVarDelta:
     2) Binned scatter plots and residual histograms
     """
 
-    def __init__(self, model: MinVarDelta) -> None:
+    def __init__(self, model: PolynomialDelta) -> None:
         """
         Initialize the plotting wrapper.
 
         Args:
-            model (MinVarDelta): A trained MinVarDelta model
+            model (PolynomialDelta): A trained MinVarDelta model
                 containing feature and prediction data.
         """
-        self.model: MinVarDelta = model
+        self.model: PolynomialDelta = model
 
     def plot(self, y_true: np.ndarray, y_pred: xr.DataArray) -> None:
         """
@@ -281,7 +281,7 @@ if __name__ == "__main__":
         coords={SIMULATION_PATH: fwds[SIMULATION_PATH], ASSET: fwds[ASSET]},
     )
 
-    min_var_delta = MinVarDelta(
+    min_var_delta = PolynomialDelta(
         fwds=fwds,
         y=y_true,
         beta=beta,

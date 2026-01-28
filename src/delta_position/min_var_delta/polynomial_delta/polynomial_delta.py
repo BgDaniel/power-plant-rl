@@ -9,11 +9,11 @@ from numpy.polynomial.chebyshev import chebvander
 from regression.regression_helpers import EPS
 
 from constants import SIMULATION_PATH, ASSET, POWER, COAL, SPREAD
-from delta_position.delta_position import DeltaPosition
+from delta_position.delta_calculator import DeltaCalculator
 from constants import KEY_DELTA_POSITION, KEY_PREDICTED, KEY_R2, KEY_RESIDUALS
 
 
-class MinVarDelta(DeltaPosition):
+class PolynomialDelta(DeltaCalculator):
     """
     Minimum-variance polynomial regression for hedge delta estimation.
 
@@ -203,7 +203,7 @@ class MinVarDelta(DeltaPosition):
 
         return True, result
 
-    def compute(self) -> Dict[str, xr.DataArray]:
+    def compute(self, save: bool = False) -> Dict[str, xr.DataArray]:
         """
         Fit the polynomial regression model and compute hedge deltas.
 

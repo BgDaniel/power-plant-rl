@@ -6,8 +6,8 @@ import numpy as np
 import xarray as xr
 from tqdm import tqdm
 
-from delta_position.delta_position import DeltaPosition
-from delta_position.min_var_delta.min_var_delta import MinVarDelta
+from delta_position.delta_calculator import DeltaCalculator
+from delta_position.min_var_delta.polynomial_delta.polynomial_delta import PolynomialDelta
 
 from market_simulation.constants import SIMULATION_PATH, SIMULATION_DAY, DELIVERY_START
 from market_simulation.two_factor_model.simulation_caching import CACHE_FOLDER_ENV
@@ -23,7 +23,7 @@ from constants import (
     KEY_DELTA_POSITION,
 )
 
-TDelta = TypeVar("TDelta", bound=DeltaPosition)
+TDelta = TypeVar("TDelta", bound=DeltaCalculator)
 
 
 class MinVarHedge:
@@ -38,7 +38,7 @@ class MinVarHedge:
         fwds_coal: xr.DataArray,  # (n_sims, n_days, n_delivery_months)
         polynomial_type: str = PolynomialBasisBuilder.POLY_LEGENDRE,
         polynomial_degree: int = 4,
-        delta_position_type: TDelta = MinVarDelta,
+        delta_position_type: TDelta = PolynomialDelta,
     ):
         self._n_sims = n_sims
         self._simulation_days = simulation_days

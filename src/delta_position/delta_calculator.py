@@ -6,7 +6,7 @@ import xarray as xr
 from constants import POWER, COAL, ASSET
 
 
-class DeltaPosition(ABC):
+class DeltaCalculator(ABC):
     """
     Abstract base class for delta position estimation models.
 
@@ -46,7 +46,7 @@ class DeltaPosition(ABC):
         self.beta_coal: np.ndarray = beta.sel({ASSET: COAL}).values
 
     @abstractmethod
-    def compute(self) -> Dict[str, Union[np.ndarray, xr.DataArray, float]]:
+    def compute(self, save: bool = False) -> Dict[str, Union[np.ndarray, xr.DataArray, float]]:
         """
         Perform model-specific delta computation.
 
