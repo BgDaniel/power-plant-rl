@@ -52,13 +52,20 @@ def train_nn(
     criterion = nn.MSELoss()
 
     model.train()
+
     for epoch in range(epochs):
         total_loss = 0.0
+
         for xb, yb in loader:
             xb, yb = xb.to(device), yb.to(device)
             optimizer.zero_grad()
-            pred = model(xb)
-            loss = criterion(pred, yb)
+
+            delta = model(xb)  # (batch, 2)
+            delta_power = delta[:, 0]
+            delta_coal = delta[:, 1]
+
+            y_hat = beta_power * delta_power + beta_coal * delta_coal
+            loss = criterion(y_hat, y_cashflow)
             loss.backward()
             optimizer.step()
             total_loss += loss.item() * xb.size(0)
