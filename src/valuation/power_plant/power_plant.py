@@ -413,7 +413,7 @@ class PowerPlant:
     ) -> np.ndarray:
         """
         Regress the optimal value for a given day and operational state
-        against the polynomial features of day-ahead power and coal prices.
+        against the polynomial_regression_delta features of day-ahead power and coal prices.
 
         Parameters
         ----------
@@ -466,7 +466,7 @@ class PowerPlant:
             .values
         )
 
-        # Initialize PolynomialRegression with features, target, degree, and polynomial type
+        # Initialize PolynomialRegression with features, target, degree, and polynomial_regression_delta type
         poly_reg = PolynomialRegression(
             x=x,
             y=y,

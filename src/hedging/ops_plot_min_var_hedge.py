@@ -136,13 +136,13 @@ class OpsPlotMinVarHedge:
 
     def plot_mean_delta_positions(self) -> None:
         """
-        Plot delta hedge positions for POWER and COAL over simulation days.
+        Plot polynomial_regression_delta hedge positions for POWER and COAL over simulation days.
 
         This method creates a two-row subplot:
             • Top row: Delta positions for POWER across all delivery start dates.
             • Bottom row: Delta positions for COAL across all delivery start dates.
 
-        For each asset, each line represents the time series of delta values for a
+        For each asset, each line represents the time series of polynomial_regression_delta values for a
         given delivery start date.
 
         Parameters
@@ -159,7 +159,7 @@ class OpsPlotMinVarHedge:
 
         for ax, asset in zip(axes, assets):
             for delivery_start in self.hedge._delivery_start_dates:
-                # Extract delta positions for a specific delivery month and asset
+                # Extract polynomial_regression_delta positions for a specific delivery month and asset
                 delta_values = (
                     self.hedge.deltas
                     .sel({DELIVERY_START: delivery_start, ASSET: asset})

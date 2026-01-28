@@ -15,30 +15,30 @@ from regression.regression_helpers import (
 
 class PolynomialRegression:
     """
-    Class for performing polynomial regression with different polynomial bases.
+    Class for performing polynomial_regression_delta regression with different polynomial_regression_delta bases.
 
     Attributes
     ----------
     POLY_STANDARD : ClassVar[str]
-        Standard polynomial basis.
+        Standard polynomial_regression_delta basis.
     POLY_LEGENDRE : ClassVar[str]
-        Legendre polynomial basis.
+        Legendre polynomial_regression_delta basis.
     POLY_CHEBYSHEV : ClassVar[str]
-        Chebyshev polynomial basis.
+        Chebyshev polynomial_regression_delta basis.
     SUPPORTED_POLYNOMIALS : ClassVar[List[str]]
-        List of supported polynomial types.
+        List of supported polynomial_regression_delta types.
     x : np.ndarray
         Input feature vector(s), shape (n_samples, n_features).
     y : np.ndarray
         Target vector, shape (n_samples,).
     degree : int
-        Degree of the polynomial to be used.
+        Degree of the polynomial_regression_delta to be used.
     poly_type : str
-        Type of polynomial basis to use.
+        Type of polynomial_regression_delta basis to use.
     model : Optional[LinearRegression]
         The fitted scikit-learn LinearRegression model.
     x_poly : Optional[np.ndarray]
-        The expanded feature matrix after applying the polynomial transformation.
+        The expanded feature matrix after applying the polynomial_regression_delta transformation.
     """
 
     def __init__(
@@ -60,7 +60,7 @@ class PolynomialRegression:
 
     def regress(self) -> Dict[str, np.ndarray]:
         """
-        Perform polynomial regression using the specified polynomial type.
+        Perform polynomial_regression_delta regression using the specified polynomial_regression_delta type.
 
         Returns
         -------
@@ -79,7 +79,7 @@ class PolynomialRegression:
             return degenerate_result
 
         # -------------------------
-        # Normal polynomial regression
+        # Normal polynomial_regression_delta regression
         # -------------------------
         self.x_poly = self._builder.build(self.x)
 

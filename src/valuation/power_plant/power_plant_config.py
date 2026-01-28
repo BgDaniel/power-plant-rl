@@ -31,7 +31,7 @@ class PowerPlantConfig:
     n_days_ramping_down : int
         Number of days required to ramp down operations.
     polynomial_degree : int
-        Degree of polynomial used for regression calculations.
+        Degree of polynomial_regression_delta used for regression calculations.
     """
 
     # Costs

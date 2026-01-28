@@ -49,11 +49,11 @@ def shifted_legendre_basis_dynamic(x: float, degree: int, x_max: float) -> np.nd
 
     Args:
         x: Value to evaluate.
-        degree: Maximum polynomial degree.
+        degree: Maximum polynomial_regression_delta degree.
         x_max: Upper bound of the interval.
 
     Returns:
-        Array of polynomial values [P0(x), ..., P_degree(x)].
+        Array of polynomial_regression_delta values [P0(x), ..., P_degree(x)].
     """
     y = 2 * np.array(x) / max(x_max, 1e-6) - 1
     coeffs = np.eye(degree + 1)

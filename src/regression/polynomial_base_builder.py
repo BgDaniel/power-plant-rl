@@ -7,7 +7,7 @@ from typing import ClassVar, List, Literal, Optional
 
 class PolynomialBasisBuilder:
     """
-    Utility class to generate polynomial design matrices for different bases,
+    Utility class to generate polynomial_regression_delta design matrices for different bases,
     with optional PCA pre-processing to reduce dimensionality.
 
     Supports
@@ -19,9 +19,9 @@ class PolynomialBasisBuilder:
     Parameters
     ----------
     degree : int
-        Maximum degree of polynomial expansion.
+        Maximum degree of polynomial_regression_delta expansion.
     poly_type : {'standard', 'legendre', 'chebyshev'}, default='standard'
-        Type of polynomial basis to use.
+        Type of polynomial_regression_delta basis to use.
     n_components : int, optional
         Number of most relevant features to keep via PCA.
         If None, all original features are used.
@@ -39,19 +39,19 @@ class PolynomialBasisBuilder:
         n_components: Optional[int] = 6,  # <= NEW: PCA components
     ) -> None:
         """
-        Initialize the polynomial basis builder.
+        Initialize the polynomial_regression_delta basis builder.
 
         Parameters
         ----------
         degree : int
-            Maximum degree of polynomial expansion.
+            Maximum degree of polynomial_regression_delta expansion.
         poly_type : {'standard', 'legendre', 'chebyshev'}, default='standard'
-            Type of polynomial basis to use.
+            Type of polynomial_regression_delta basis to use.
         n_components : int, optional
             Number of most relevant features to keep via PCA. If None, all features are used.
         """
         if poly_type not in self.SUPPORTED:
-            raise ValueError(f"Unsupported polynomial type: {poly_type}")
+            raise ValueError(f"Unsupported polynomial_regression_delta type: {poly_type}")
         self.degree = degree
         self.poly_type = poly_type
         self.n_components = n_components
@@ -87,7 +87,7 @@ class PolynomialBasisBuilder:
         n_features : int
             Number of input features.
         degree : int
-            Maximum polynomial degree.
+            Maximum polynomial_regression_delta degree.
 
         Yields
         ------
@@ -134,7 +134,7 @@ class PolynomialBasisBuilder:
     # -------------------------
     def build(self, x: np.ndarray) -> np.ndarray:
         """
-        Build the polynomial design matrix for input x.
+        Build the polynomial_regression_delta design matrix for input x.
 
         Parameters
         ----------
@@ -144,7 +144,7 @@ class PolynomialBasisBuilder:
         Returns
         -------
         np.ndarray
-            Design matrix with polynomial basis.
+            Design matrix with polynomial_regression_delta basis.
         """
         # ----- Optional PCA -----
         if self.n_components is not None:

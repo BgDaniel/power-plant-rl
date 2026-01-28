@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import TensorDataset, DataLoader
 import torch.nn as nn
 import torch.optim as optim
-from ml_hedging.nn_delta.nn_delta_model import NNDeltaModel
+from delta_position.min_var_delta.nn_delta.nn_delta_model import NNDeltaModel
 
 
 class HyperparameterTuner:
@@ -16,7 +16,7 @@ class HyperparameterTuner:
     X : np.ndarray or torch.Tensor
         Feature matrix for training (n_samples, n_features).
     y : np.ndarray or torch.Tensor
-        Target delta values (n_samples, output_dim).
+        Target polynomial_regression_delta values (n_samples, output_dim).
     device : str, optional
         PyTorch device to use ("cuda" or "cpu"). Defaults to CUDA if available.
     """

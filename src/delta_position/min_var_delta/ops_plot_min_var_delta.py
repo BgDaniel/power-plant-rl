@@ -5,7 +5,7 @@ from scipy.interpolate import griddata
 import xarray as xr
 
 from constants import ASSET, POWER, COAL, SIMULATION_PATH, KEY_PREDICTED
-from delta_position.min_var_delta.polynomial_delta import PolynomialDelta
+from delta_position.min_var_delta.polynomial_regression_delta.polynomial_regression_delta import PolynomialRegressionDelta
 
 
 class OpsPlotMinVarDelta:
@@ -17,15 +17,15 @@ class OpsPlotMinVarDelta:
     2) Binned scatter plots and residual histograms
     """
 
-    def __init__(self, model: PolynomialDelta) -> None:
+    def __init__(self, model: PolynomialRegressionDelta) -> None:
         """
         Initialize the plotting wrapper.
 
         Args:
-            model (PolynomialDelta): A trained MinVarDelta model
+            model (PolynomialRegressionDelta): A trained MinVarDeltaCalculator model
                 containing feature and prediction data.
         """
-        self.model: PolynomialDelta = model
+        self.model: PolynomialRegressionDelta = model
 
     def plot(self, y_true: np.ndarray, y_pred: xr.DataArray) -> None:
         """

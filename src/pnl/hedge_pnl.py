@@ -2,7 +2,6 @@ import pandas as pd
 import xarray as xr
 import numpy as np
 from tqdm import tqdm
-from typing import Optional
 
 from constants import ASSET, DELIVERY_START, SIMULATION_DAY
 from hedging.min_var_hedge import MinVarHedge
@@ -96,8 +95,8 @@ class HedgePnL:
 
         Steps
         -----
-        1. Buy initial delta positions at the first simulation day.
-        2. Rebalance delta positions on each subsequent simulation day.
+        1. Buy initial polynomial_regression_delta positions at the first simulation day.
+        2. Rebalance polynomial_regression_delta positions on each subsequent simulation day.
         A progress bar tracks simulation progress.
         """
         # Step 1: buy initial hedge positions
@@ -115,7 +114,7 @@ class HedgePnL:
     # ------------------------------------------------------------------ #
     def _initialize_delta_positions(self) -> None:
         """
-        Establish initial hedge delta positions on the first simulation day.
+        Establish initial hedge polynomial_regression_delta positions on the first simulation day.
 
         Buys the required forward contracts for the front-month delivery
         period and updates the hedge cash account.
@@ -155,7 +154,7 @@ class HedgePnL:
     # ------------------------------------------------------------------ #
     def _rebalance_delta_positions(self, simulation_day: pd.Timestamp) -> None:
         """
-        Rebalance hedge delta positions for a given simulation day.
+        Rebalance hedge polynomial_regression_delta positions for a given simulation day.
 
         Parameters
         ----------
@@ -165,8 +164,8 @@ class HedgePnL:
         Notes
         -----
         The cash account is adjusted by the cost of the incremental
-        forward contracts required to move from yesterday's delta to
-        today's delta.
+        forward contracts required to move from yesterday's polynomial_regression_delta to
+        today's polynomial_regression_delta.
         """
         delivery_start_dates = self.hedge.get_front_months_start_dates(simulation_day)
 
