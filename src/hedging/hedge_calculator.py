@@ -6,8 +6,8 @@ import numpy as np
 import xarray as xr
 from tqdm import tqdm
 
-from delta_position.delta_calculator import DeltaCalculator
-from delta_position.min_var_delta.polynomial_delta.polynomial_delta import PolynomialDelta
+from delta.delta_calculator import DeltaCalculator
+from delta.min_var_delta.min_var_delta import MinVarDeltaCalculator
 
 from market_simulation.constants import SIMULATION_PATH, SIMULATION_DAY, DELIVERY_START
 from market_simulation.two_factor_model.simulation_caching import CACHE_FOLDER_ENV
@@ -26,7 +26,7 @@ from constants import (
 TDelta = TypeVar("TDelta", bound=DeltaCalculator)
 
 
-class MinVarHedge:
+class HedgeCalculator:
     def __init__(
         self,
         n_sims: int,
@@ -36,9 +36,7 @@ class MinVarHedge:
         spots_coal: pd.DataFrame,  # (sim_days, n_sims)
         fwds_power: xr.DataArray,  # (n_sims, n_days, n_delivery_months)
         fwds_coal: xr.DataArray,  # (n_sims, n_days, n_delivery_months)
-        polynomial_type: str = PolynomialBasisBuilder.POLY_LEGENDRE,
-        polynomial_degree: int = 4,
-        delta_position_type: TDelta = PolynomialDelta,
+        delta_calculator: TDelta = MinVarDeltaCalculator,
     ):
         self._n_sims = n_sims
         self._simulation_days = simulation_days
@@ -84,10 +82,7 @@ class MinVarHedge:
 
         self._n_front_months = len(self._delivery_start_dates)
 
-        self._polynomial_type = polynomial_type
-        self._polynomial_degree = polynomial_degree
-
-        self._delta_position_type = delta_position_type
+        self._delta_calculator = delta_calculator
 
         coords = {
             SIMULATION_PATH: np.arange(self._n_sims),
@@ -297,12 +292,12 @@ class MinVarHedge:
             {DELIVERY_START: delivery_start, SIMULATION_DAY: hedge_date}
         )
 
-        delta_position_calculator = self._delta_position_type(
+        delta_position_calculator = self._delta_calculator(
             fwds=fwds, y=y, beta=beta, efficiency=self._power_plant.efficiency
         )
 
         # Perform regression
-        results = delta_position_calculator.compute()
+        results = delta_position_calculator.delta()
         delta_positions = results[KEY_DELTA_POSITION]
         r2_score = results[KEY_R2]
 

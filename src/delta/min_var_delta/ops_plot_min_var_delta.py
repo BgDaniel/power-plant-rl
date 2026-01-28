@@ -5,7 +5,7 @@ from scipy.interpolate import griddata
 import xarray as xr
 
 from constants import ASSET, POWER, COAL, SIMULATION_PATH, KEY_PREDICTED
-from delta_position.min_var_delta.polynomial_delta.polynomial_delta import PolynomialDelta
+from delta_position.min_var_delta.polynomial_delta import PolynomialDelta
 
 
 class OpsPlotMinVarDelta:
@@ -288,6 +288,6 @@ if __name__ == "__main__":
         efficiency=0.95,
     )
 
-    y_pred = min_var_delta.compute()[KEY_PREDICTED]
+    y_pred = min_var_delta.delta()[KEY_PREDICTED]
 
     OpsPlotMinVarDelta(min_var_delta).plot(y_true=y_true, y_pred=y_pred)

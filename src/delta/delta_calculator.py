@@ -46,7 +46,7 @@ class DeltaCalculator(ABC):
         self.beta_coal: np.ndarray = beta.sel({ASSET: COAL}).values
 
     @abstractmethod
-    def compute(self, save: bool = False) -> Dict[str, Union[np.ndarray, xr.DataArray, float]]:
+    def delta(self, save: bool = False) -> Dict[str, Union[np.ndarray, xr.DataArray, float]]:
         """
         Perform model-specific delta computation.
 
